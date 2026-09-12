@@ -46,17 +46,30 @@ class BioVerifyRefused(BioVerifyError):
         self.retryable = retryable
 
 
-# Verify outcomes. The service's own vocabulary is not fully documented, so accept the
-# plausible spellings and treat anything unrecognised as a DENY — never as an allow (§22.6).
+# Verify outcomes. OBSERVED against the live service: `RETRY` (an undecodable credential) and
+# `BLOCK` (a refused verification). The accept token is not yet confirmed, so the plausible
+# spellings are all accepted; anything unrecognised is a DENY, never an allow (§22.6).
 _ALLOW_OUTCOMES = frozenset({"ACCEPT", "ACCEPTED", "ALLOW", "ALLOWED", "MATCH", "MATCHED",
                              "PASS", "PASSED", "OK", "SUCCESS", "VERIFIED"})
 _RETRY_OUTCOMES = frozenset({"RETRY", "RETRYABLE", "TRY_AGAIN"})
+_DENY_OUTCOMES = frozenset({"BLOCK", "BLOCKED", "DENY", "DENIED", "REJECT", "REJECTED", "FAIL"})
 
 
 def classify_outcome(outcome: str) -> tuple[bool, bool]:
     """Map a service outcome to (allowed, retry). Unknown → (False, False): fail closed."""
     token = (outcome or "").strip().upper()
     return token in _ALLOW_OUTCOMES, token in _RETRY_OUTCOMES
+
+
+def is_known_outcome(outcome: str) -> bool:
+    """Whether the service said something we recognise.
+
+    An unrecognised outcome still denies, but it means the service has changed its vocabulary
+    and every gate is now failing closed on a word we do not understand — worth alerting on
+    rather than silently refusing people.
+    """
+    token = (outcome or "").strip().upper()
+    return token in _ALLOW_OUTCOMES or token in _RETRY_OUTCOMES or token in _DENY_OUTCOMES
 
 
 def band_for(similarity: float | None, threshold: float | None) -> str:

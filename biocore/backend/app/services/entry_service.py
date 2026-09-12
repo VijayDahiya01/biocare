@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.adapters.bioverify import get_bioverify
+from app.adapters.bioverify.base import is_known_outcome
 from app.adapters.face_engine import FaceEngineError, get_face_engine
 from app.core import metrics
 from app.core.config import settings
@@ -96,6 +97,10 @@ def _verify_bioverify(db: Session, *, credential, image: str) -> tuple[bool, str
         return False, "none", True
     with metrics.timer("gate.match_latency_ms"):
         result = _bioverify().verify(image=image, qr_text=qr_text)
+    if not is_known_outcome(result.outcome):
+        # Still denies, but the service has changed its vocabulary and every gate is now
+        # refusing people on a word we do not understand. That needs attention, not silence.
+        metrics.incr("bioverify.unknown_outcome")
     return result.allowed, result.band, _liveness_from(result)
 
 
