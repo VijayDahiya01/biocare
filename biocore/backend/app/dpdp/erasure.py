@@ -1,7 +1,11 @@
 """The erasure cascade — DPDP right to erasure (System doc §8.1).
 
 One request performs a verified, atomic deletion across every store:
-  * Milvus vector + MinIO image  -> ZepIris DELETE (the engine owns both)
+  * Milvus vector + MinIO image  -> the legacy engine DELETE (it owns both). Only subjects
+    enrolled through the OLD face path have anything there; the verified-identity path stores
+    no image and no vector, so on a deployment without those services erasure still completes
+    and self-verifies. If a subject DOES have legacy data and the engine is unreachable, this
+    refuses rather than certify an erasure it cannot confirm.
   * Postgres biometric refs       -> face_records hard-deleted; user PII redacted
   * Redis sessions                -> flushed
 Each deletion is independently VERIFIED before the erasure is marked complete,
@@ -19,7 +23,6 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.adapters.zepiris import ZepIrisError, get_zepiris
 from app.core.envelope import ApiError
 from app.core.sessions import flush_user_sessions
 from app.models import ConsentRecord, FaceRecord, User, UserBadge
@@ -35,7 +38,6 @@ def erase_user(db: Session, *, tenant_id: str, user_id: str) -> dict:
     if not user:
         raise ApiError(404, "USER_NOT_FOUND", "User does not exist in this tenant.")
 
-    z = get_zepiris()
     face_ids = [
         fr.milvus_vector_id
         for fr in db.execute(
@@ -44,14 +46,31 @@ def erase_user(db: Session, *, tenant_id: str, user_id: str) -> dict:
     ]
 
     stores_cleared: list[str] = []
+    legacy_verified: bool | None = None
 
-    # 1. Milvus + MinIO via the engine.
-    for fid in face_ids:
-        try:
-            z.delete(fid)
-        except ZepIrisError:
-            pass  # verification below is the source of truth
+    # 1. Milvus + MinIO, via the legacy engine that owns both.
+    #
+    # Only subjects enrolled through the OLD face path have rows here. The verified-identity
+    # path stores no image and no vector, so for anything enrolled through it there is nothing
+    # in either store and the engine is never contacted — which is why erasure works on a
+    # deployment that runs neither. Imported lazily for exactly that reason.
     if face_ids:
+        from app.adapters.zepiris import ZepIrisError, get_zepiris
+        z = get_zepiris()
+        for fid in face_ids:
+            try:
+                z.delete(fid)
+            except ZepIrisError:
+                pass  # verification below is the source of truth
+        try:
+            legacy_verified = all(z.get(fid) is None for fid in face_ids)
+        except ZepIrisError as e:
+            # This subject HAS legacy biometric data and we cannot confirm it is gone. Saying
+            # "erased" here would put a false claim on a compliance certificate.
+            raise ApiError(503, "ERASURE_UNVERIFIABLE",
+                           "This person has face data in the legacy store and that service "
+                           "cannot be reached, so erasure cannot be confirmed. Retry once it "
+                           "is available.", details={"store": "milvus/minio"}) from e
         stores_cleared += ["milvus", "minio"]
 
     # 2. Postgres: drop biometric refs + badges, redact PII, revoke consent.
@@ -80,13 +99,16 @@ def erase_user(db: Session, *, tenant_id: str, user_id: str) -> dict:
 
     # --- VERIFY each store independently ---
     verified = {
-        "milvus": all(z.get(fid) is None for fid in face_ids),
         "postgres": db.execute(
             select(FaceRecord.id).where(FaceRecord.user_id == user_id).limit(1)
         ).first() is None,
         "redis": flush_user_sessions(user_id) == 0,
     }
-    verified["minio"] = verified["milvus"]  # engine deletes both together
+    # Report the legacy stores only when this subject actually had data in them. Claiming
+    # "verified" for a store that was never used reads as a stronger assurance than it is.
+    if legacy_verified is not None:
+        verified["milvus"] = legacy_verified
+        verified["minio"] = legacy_verified   # the engine deletes both together
 
     if not all(verified.values()):
         raise ApiError(500, "ERASURE_INCOMPLETE",

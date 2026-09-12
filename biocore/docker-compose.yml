@@ -1,5 +1,12 @@
-# BioCore — full stack, one command up.
-#   docker compose up --build
+# BioCore — LOCAL DEVELOPMENT stack.
+#
+# For production use docker-compose.prod.yml: four containers, with Postgres and Redis as
+# managed services. This file still defines zepiris-main, zepiris-ml, milvus, etcd and minio
+# for the RETIRED legacy face path. Nothing in the current architecture reads them — face
+# credentials come from the BioVerify service (CREDENTIAL_ENGINE=bioverify) and no raw image
+# or vector is stored. Start only what you need:
+#
+#   docker compose up gateway frontend api postgres redis
 #
 # Phase 0 acceptance: every container below comes up healthy, the api can reach
 # postgres/redis/milvus/minio, and the zepiris adapter can enroll+search a test face.

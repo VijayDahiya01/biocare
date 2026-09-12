@@ -225,7 +225,24 @@ class ZepIrisClient:
 
 @lru_cache
 def get_zepiris():
+    """The legacy face engine.
+
+    RETIRED when the product runs on BioVerify credentials: ZepIris, Milvus and MinIO are no
+    longer deployed, so every call here would be a connection refused surfacing as an opaque
+    500. Fail immediately with something a person can act on instead — callers already handle
+    ZepIrisError and turn it into a clean response.
+
+    The features still routed through here (kiosk 1:N check-in, GPS field check-in, the
+    blacklist watchlist, and the person "capture once" master template) have direct
+    replacements on the new engine and need porting; see docs/DEPLOY_DIGITALOCEAN.md.
+    """
     if settings.fake_zepiris:
         from app.adapters.zepiris.fake import FakeZepIris
         return FakeZepIris()
+    if (settings.credential_engine or "").strip().lower() == "bioverify":
+        raise ZepIrisError(
+            "This feature still uses the retired ZepIris face engine, which is not deployed. "
+            "Use the verified-identity flow instead: /person/verify/* to register a face and "
+            "/entry/match or /entry/identify at a gate.",
+            status_code=503, code="LEGACY_ENGINE_RETIRED")
     return ZepIrisClient()
