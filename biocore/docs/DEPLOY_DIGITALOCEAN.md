@@ -7,11 +7,20 @@ one before worked.
 replaced by the BioVerify credential API) and it targets Kubernetes. Use this file for a
 DigitalOcean droplet.
 
-> **Read this first.** Before real people use this, see the readiness assessment. In short:
-> there is no anti-spoof model in the path, so **a printed photo of a face passes**; no threshold
-> is calibrated; and nobody has yet confirmed that revoking a credential shuts the gate. Those
-> are not deployment problems and none of this runbook fixes them. Deploying for a pilot,
-> internal trial or demo is reasonable. Putting it on a door that matters is not, yet.
+> **Read this first.** The registration and gate paths are proven against the live face service
+> — a real enrolment issued a real credential, and a different person's face was correctly
+> refused at `-0.14` against a `0.35` threshold, in about 1.5 seconds.
+>
+> Three things are still open, and none of them is a deployment problem:
+>
+> - **Anti-spoofing is computed and then ignored.** Every verification returns a spoof score and
+>   says so itself: `"pad": {"attack_probability": 0.235, "status": "RESEARCH_ONLY - not
+>   enforced at verify"}`. A printed photo passes. The number exists; someone has to choose a
+>   threshold and enforce it.
+> - **No threshold is calibrated**, so you cannot state a false-accept rate.
+> - **Nobody has confirmed that revoking a credential shuts the gate.**
+>
+> A pilot, internal trial or demo is reasonable. A door that matters is not, yet.
 
 ---
 
@@ -56,6 +65,38 @@ set Trusted Sources to the droplet **only** — never open them to the internet.
 
 **DNS** — point an A record at the reserved IP. You need a real hostname; certificates are not
 issued for bare IPs.
+
+---
+
+## 1b. The face service is a dependency you own
+
+BioCore does not do face matching itself. It calls the **BioVerify** service, and that box has
+to be healthy before anyone can register a face or pass a gate. It runs on its own droplet.
+
+Before deploying BioCore, confirm all three — every one of these has failed in practice:
+
+```bash
+# 1. reachable, and models actually loaded (not just "ok")
+curl -s https://your-bioverify-host/health
+#    {"status":"ok","credentials":N,"models_loaded":true}
+#    models_loaded:false means enrolment fails; they load lazily on first use
+
+# 2. the API key is accepted
+curl -s -H "X-API-Key: YOUR_KEY" https://your-bioverify-host/policy/manifest
+#    a 401 here means the key is not one this instance knows
+
+# 3. the TLS certificate matches the hostname — note: NO -k
+curl -s -o /dev/null -w "%{http_code}\n" https://your-bioverify-host/health
+```
+
+That third one matters more than it looks. If the service moves to a new IP, its `sslip.io`
+hostname changes and the old certificate no longer matches. `curl -k` still works, so it looks
+fine by hand — but BioCore verifies certificates properly and will refuse to connect, and
+**every** registration and gate scan fails. Reissue with
+`certbot --nginx -d <new-host>` on that box.
+
+Being one machine with no failover, it is the single point of failure for the whole product.
+Plan for it being down: today, a gate simply refuses everyone.
 
 ---
 
@@ -220,8 +261,16 @@ selected without its address.
 ## 7. Verify before anyone uses it
 
 ```bash
-curl -s https://yourdomain.com/api/v1/health          # {"status":"ok"}
+curl -s https://yourdomain.com/api/v1/health          # {"status":"ok"} — is the process alive
+curl -s https://yourdomain.com/api/v1/ready           # can it reach everything it needs
 curl -sI https://yourdomain.com/admin/login | head -1 # 200
+```
+
+`/ready` is the one to point a load balancer at. It returns **503** until every dependency
+answers, and names the one that does not:
+
+```json
+{"ready":true,"checks":{"postgres":true,"redis":true,"bioverify":true}}
 ```
 
 **Prove tenant isolation on the real database.** This is the one test worth running against
@@ -268,9 +317,21 @@ If a customer asks what stops that, the honest answer today is "nothing yet".
 **Logs.** Already capped at 10 MB × 5 files per container in the compose file, so they cannot fill
 the disk.
 
-**Monitoring.** Turn on DigitalOcean Monitoring with alerts for CPU, memory, disk above 80%. Also
-watch, from the app: `bioverify.revoke_failure` (a credential dead locally but alive upstream) and
-gate mismatch/liveness rates.
+**Monitoring.** Turn on DigitalOcean Monitoring with alerts for CPU, memory, disk above 80%.
+Point its HTTP check at `/api/v1/ready`, not `/health` — the first tells you the product works,
+the second only that the process is alive.
+
+From the app, three counters worth alerting on:
+
+| Counter | Why it matters |
+|---|---|
+| `bioverify.unknown_outcome` | The face service answered with a word we do not recognise. Every gate is now refusing people, and silently. |
+| `bioverify.revoke_failure` | A credential is dead here but alive upstream — someone's QR still works. |
+| `gate.mismatch` / `gate.liveness_failure` | A spike is either an attack or a broken camera. |
+
+**Baselines measured against the live service**, so you know what "slow" means: a verification is
+about **1.5 s**; a capture the quality gate refuses comes back in about **4.8 s**. A gate scan
+much beyond two seconds means something is wrong.
 
 **Updating:**
 
@@ -295,4 +356,7 @@ Check whether the release added one, and take a database snapshot before any dep
 | Cannot sign in, no error | `COOKIE_SECURE=true` without working HTTPS. Fix TLS first. |
 | No sign-in codes arrive | `SMTP_URL` wrong, or port 25 blocked. Use 465/587. |
 | Tenants can see each other | The app is connecting as a superuser or `BYPASSRLS` role. Step 2. |
-| Faces never register | BioVerify unreachable or its API key rejected. `curl https://your-bioverify-host/health`. |
+| Faces never register | BioVerify unreachable, key rejected, or its certificate does not match its hostname. Step 1b — and test **without** `curl -k`. |
+| "That photo wasn't clear enough" every time | The quality gate is refusing the capture, not a bug. More light, face filling the frame, hold still. The reason is in `details.reason`. |
+| Everything refused, no obvious cause | Check `bioverify.unknown_outcome`. The service may have changed its answer vocabulary; gates then fail closed on a word we do not recognise. |
+| A feature 503s with `LEGACY_ENGINE_RETIRED` | It still runs on the removed ZepIris engine: kiosk 1:N check-in, GPS field check-in, blacklist, or the person "capture once" template. All four need porting to the new engine. |
