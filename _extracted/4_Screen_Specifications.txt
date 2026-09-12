@@ -1,0 +1,304 @@
+﻿
+Document 3 of 6
+Screen Specifications
+Every Screen, Component & User Flow
+Frontend build guide — Next.js + React + Tailwind
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Part 1
+Frontend Overview
+
+1. Frontend overview
+The frontend is a single Next.js application (App Router) serving three portals from one codebase. All screens are web-only and responsive down to tablet width for kiosks. No mobile app.
+1.1 The three portals
+Portal
+Route prefix
+Who uses it
+Auth
+Admin
+/admin/*
+Entity admin, managers, HR, auditor
+Email + password + TOTP
+Member self-service
+/me/*
+Self-registered users
+Email + OTP
+Kiosk
+/kiosk, /register, /enroll
+Shared terminals, new registrants
+Device token / none
+
+1.2 Tech & component rules
+Framework: Next.js 14 App Router, React, TypeScript.
+Styling: Tailwind CSS with shadcn/ui as the base component library.
+Data: TanStack Query for server state; tables via TanStack Table; charts via Recharts.
+Camera: navigator.mediaDevices.getUserMedia; capture a frame to canvas, convert to base64 JPEG.
+No localStorage tokens: auth is cookie-based. Never store the session in JS-accessible storage.
+All forms send the X-CSRF-Token header on submit.
+
+Part 2
+Screen Inventory
+
+2. Complete screen inventory
+Forty screens across the three portals. Each is specified in Part 3 onward with purpose, components, API calls, and states.
+2.1 Admin portal screens
+#
+Screen
+Route
+Key API
+A1
+Login (+ 2FA)
+/admin/login
+POST /auth/login
+A2
+Dashboard overview
+/admin/dashboard
+GET /attendance/presence
+A3
+Attendance log
+/admin/attendance
+GET /attendance
+A4
+Live feed
+/admin/live
+GET /attendance (poll)
+A5
+Users list
+/admin/users
+GET /users
+A6
+User profile
+/admin/users/[id]
+GET /users/{id}
+A7
+Admin-assisted enroll
+/admin/enroll
+POST /admin/enroll
+A8
+Zones
+/admin/zones
+GET/POST /zones
+A9
+Badges
+/admin/badges
+GET/POST /badges
+A10
+Devices
+/admin/devices
+GET/POST /devices
+A11
+Visitors
+/admin/visitors
+POST /visitors/invite
+A12
+Blacklist
+/admin/blacklist
+GET/POST /blacklist
+A13
+Reports
+/admin/reports
+GET /reports/*
+A14
+Alerts
+/admin/alerts
+GET /alerts
+A15
+HR / payroll
+/admin/hr
+GET /reports/payroll
+A16
+Audit log viewer
+/admin/audit
+GET /audit
+A17
+Settings (DPDP, branding)
+/admin/settings
+PATCH /settings
+A18
+Webhooks
+/admin/settings/webhooks
+GET/POST webhooks
+A19
+Emergency headcount
+/admin/emergency
+GET /attendance/presence
+A20
+Roles & permissions
+/admin/roles
+GET/POST /roles
+
+2.2 Member self-service screens
+#
+Screen
+Route
+Key API
+M1
+Login (OTP)
+/me/login
+POST /auth/otp/*
+M2
+My attendance
+/me/attendance
+GET /attendance (self)
+M3
+My leave
+/me/leave
+GET/POST /leave
+M4
+My consent
+/me/consent
+GET /me/consent
+M5
+My data (export)
+/me/data
+GET /me/data/export
+M6
+Request erasure
+/me/erasure
+POST /me/data/erasure
+M7
+Grievance
+/me/grievance
+POST /grievance
+
+2.3 Kiosk & registration screens
+#
+Screen
+Route
+Key API
+K1
+Kiosk check-in
+/kiosk
+POST /faces/search
+K2
+Self-registration
+/register
+POST /register
+K3
+Email verify
+/register/verify
+POST /auth/otp/verify
+K4
+Consent + face capture
+/enroll
+POST /consent, /faces/enroll
+K5
+Registration complete
+/enroll/done
+—
+K6
+Visitor self-enroll
+/visit/[token]
+POST /visitors/enroll
+K7
+Guardian enroll
+/guardian/[token]
+POST /faces/enroll
+
+Reference mockups already exist
+Working visual mockups were produced for: the consent flow (K4), self-registration (K2–K5), the kiosk check-in (K1), and the admin dashboard (A2–A14).
+The freelancer should treat those mockups as the visual source of truth and this document as the behavioural spec.
+
+Part 3
+Key Screens In Detail
+
+3. Key screens in detail
+The most important and complex screens are specified here. The rest follow the same pattern: a list/table screen, a create/edit form, or a detail view.
+K1 — Kiosk check-in
+Purpose: The always-on terminal screen. Captures faces continuously and records attendance.
+Components:
+Full-screen live camera view with a face-positioning ring.
+Status text: 'Look at the camera' → 'Scanning' → result.
+Result card: name, role, score, check-in/out badge, time.
+Device + zone label in a corner; today's event count.
+API calls:
+POST /faces/search with the captured frame + device_id + action=auto.
+Device authenticates via its device-token cookie.
+States to handle:
+Idle (waiting for a face).
+Scanning (frame sent, awaiting response).
+Match — check-in (green).
+Match — check-out (amber, shows duration).
+No match (red, 'not registered').
+Blacklist hit (red alert, 'do not admit').
+Quality fail (ask to retry).
+Auto-reset to idle after 3.5 seconds.
+
+K4 — Consent + face capture
+Purpose: Collects DPDP consent then captures the face. Used in self-registration and guardian enrollment.
+Components:
+Four mandatory consent checkboxes (purpose, sensitivity, rights, free consent).
+Confirm button — disabled until all four are ticked.
+Camera box, enabled only after consent.
+'Use manual attendance instead' alternative, always visible.
+API calls:
+POST /consent (before capture).
+POST /faces/enroll (after capture).
+States to handle:
+Consent incomplete (button disabled).
+Camera off / on / captured.
+Quality pass → proceed.
+Quality fail → retry message.
+Success → confirmation screen with consent ref.
+
+A2 — Dashboard overview
+Purpose: The admin's home. Live metrics, live feed, recent registrations, device status.
+Components:
+Four metric cards: checked-in, inside now, late, absent.
+Live check-in feed (auto-refresh).
+Recent registrations list.
+Device status panel.
+Tab nav to attendance / users / alerts.
+API calls:
+GET /attendance/presence (metrics + inside).
+GET /attendance?from=today (feed).
+GET /users?sort=created (recent).
+GET /devices (status).
+States to handle:
+Loading skeletons per panel.
+Empty (no data yet).
+Live update (poll every 10s).
+Alert badge count on the Alerts tab.
+
+A7 — Admin-assisted enrollment
+Purpose: Admin enrolls a patient/inmate/citizen/devotee/visitor/guardian on their behalf.
+Components:
+Person-type selector (6 types).
+Details form (fields change by type).
+Four admin-confirmation checkboxes.
+Camera capture.
+Optional consent-form file upload.
+Success card with enrollment + consent refs.
+API calls:
+POST /admin/enroll (multipart: details + image).
+States to handle:
+Type not selected.
+Form incomplete.
+Confirmations unticked (capture disabled).
+Capture success/fail.
+Enrolled — option to enroll another.
+
+M6 — Request erasure
+Purpose: Lets a member exercise their DPDP right to erasure.
+Components:
+Explanation of what erasure does and does not delete.
+OTP re-authentication step.
+Confirm button with a clear warning.
+Result: erasure reference + downloadable certificate.
+API calls:
+POST /me/data/erasure (after OTP re-auth).
+States to handle:
+Pre-confirmation explainer.
+OTP challenge.
+Processing (cascade running).
+Complete — show certificate link.
+Switched to manual attendance notice.
+
+
+End of Screen Specifications
+

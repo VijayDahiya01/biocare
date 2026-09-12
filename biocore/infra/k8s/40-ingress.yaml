@@ -1,0 +1,34 @@
+# TLS 1.3 ingress. /api routes to the API, everything else to the frontend.
+# Requires an ingress controller (nginx-ingress) and cert-manager (or a TLS secret).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: biocore
+  namespace: biocore
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+    # face-search rate limit at the edge (per the API Reference)
+    nginx.ingress.kubernetes.io/limit-rpm: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["app.biocore.example"]
+      secretName: biocore-tls
+  rules:
+    - host: app.biocore.example
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port: { number: 8080 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port: { number: 3000 }

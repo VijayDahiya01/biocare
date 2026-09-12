@@ -1,0 +1,32 @@
+# secrets & env
+.env
+*.env
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# node / next
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# tls certs (generate locally / per-deploy)
+infra/nginx/certs/*.crt
+infra/nginx/certs/*.key
+
+# ml model weights (large; mount at deploy)
+infra/models/*.pth
+
+# generated PDFs (certificates / receipts / musters)
+backend/generated/
+
+# os
+.DS_Store
+Thumbs.db

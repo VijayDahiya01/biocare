@@ -1,0 +1,143 @@
+﻿
+Document 5 of 6
+Build Plan & Acceptance
+Phasing, Milestones & Definition of Done
+How to sequence the build and verify each part is correct
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Part 1
+Build Sequence
+
+1. Build sequence
+Build in this order. Each phase produces something testable and depends only on earlier phases. Do not start a later phase before its predecessor passes acceptance.
+1.1 Phase 0 — Foundation (weeks 1–2)
+Set up the repo, CI/CD, Docker Compose with all containers running.
+Stand up PostgreSQL with the core tables (tenants, users, roles, consent, audit).
+Deploy ZepIris and confirm enroll + search work with a test image.
+Build the API gateway, session auth, and CSRF.
+Phase 0 done when
+A developer can register a tenant, create an admin, log in, and the session cookie works.
+ZepIris returns a vector for a test face and a match on a second image of the same face.
+
+1.2 Phase 1 — Core attendance MVP (weeks 3–6)
+Self-registration flow (register → OTP → consent → face enroll).
+Kiosk check-in screen with face search + toggle logic.
+Admin dashboard: overview, attendance log, users list.
+Device registration and pairing.
+Phase 1 done when
+A person can self-register on a browser and then check in/out at a kiosk.
+The admin sees the event live on the dashboard and in the attendance log.
+This is a working product for the Office, Gym, and basic School/Factory verticals.
+
+1.3 Phase 2 — Access, zones, badges, DPDP (weeks 7–10)
+Zones, badges, and access-control decisions with door webhooks.
+Admin-assisted enrollment (unlocks Hospital, Government, Religious).
+Full DPDP suite: data export, erasure cascade, consent revoke, audit viewer.
+Blacklist + real-time alerts; visitor temp-enrollment.
+
+1.4 Phase 3 — Modules (weeks 11–16)
+Wage calculation, break tracking, GPS check-in, emergency headcount.
+Class timetable + guardian pickup (School).
+Membership billing (Gym), donations (Religious), event bulk import + badges.
+ERP webhooks and reporting/export.
+
+1.5 Phase 4 — Advanced ML (weeks 17–20)
+PPE / safety-gear detection (needs a training dataset).
+Zone movement tracking for high-security sites.
+Realistic team & timeline
+This is a 4–6 month build for a small team: 2 backend, 2 frontend, 1 ML, 1 designer, 1 QA.
+A solo freelancer would take much longer and should not attempt the DPDP and security parts without review.
+Treat the phases as fixed-scope milestones with payment tied to acceptance.
+
+Part 2
+Acceptance Criteria
+
+2. Acceptance criteria
+A feature is 'done' only when it meets its acceptance criteria. These are the contractual definition of done — tie milestone payments to them.
+2.1 Self-registration
+A new user can register with a valid org code; an invalid code is rejected.
+Email OTP is required and expires after 10 minutes.
+Face enrollment is blocked until all four consent boxes are ticked.
+The raw image is deleted after the vector is generated (verify it is not in MinIO).
+A duplicate email returns a clear 409 error.
+
+2.2 Kiosk check-in
+A registered face is matched in under 2 seconds and the event is recorded.
+Toggle logic correctly alternates check-in and check-out.
+An unregistered face shows 'not registered' and logs the no-match.
+A printed photo is rejected by spoof detection.
+A blacklisted face raises an immediate alert.
+The event appears on the admin dashboard live feed within 10 seconds.
+
+2.3 Multi-tenancy
+A user in tenant A can never see or match against tenant B's data.
+Attempting a cross-tenant ID in any request returns 404, not another tenant's data.
+Row-Level Security blocks a leak even if app code forgets a filter (test this deliberately).
+
+2.4 DPDP compliance
+No face can be enrolled without a consent record on file.
+Data export returns all of a user's data in a machine-readable format.
+Erasure deletes the vector (Milvus), image (MinIO), records (Postgres), and sessions (Redis), and each deletion is verified.
+An erasure certificate is generated with a reference ID.
+Every face search, enroll, and delete writes an audit log entry with a request ID.
+The audit log cannot be edited or deleted through the API.
+
+2.5 Security
+All traffic is TLS 1.3; HTTP is refused.
+Session cookies are HttpOnly, Secure, SameSite=Strict.
+Mutations without a valid CSRF token are rejected.
+Admin login requires TOTP 2FA.
+A penetration test finds no critical or high vulnerabilities before go-live.
+
+Part 3
+Testing & Handover
+
+3. Testing & handover
+3.1 Required test coverage
+Test type
+Covers
+Minimum
+Unit tests
+Business logic, toggle logic, wage calc
+80% of service code
+Integration tests
+API endpoints end-to-end
+Every endpoint, happy + error paths
+Isolation tests
+Cross-tenant leak attempts
+Every tenant-owned table
+DPDP tests
+Consent gate, erasure cascade
+All criteria in 2.4
+Load test
+Concurrent kiosk scans
+Target peak × 2
+Security test
+Pen test before go-live
+Zero critical/high
+
+3.2 Handover checklist
+The freelancer must deliver all of the following before final payment:
+Full source code in your repository, with README and setup instructions.
+Docker Compose / Kubernetes configs that bring the whole stack up with one command.
+Database migration scripts (reversible).
+All environment variables documented.
+Passing test suite with a coverage report.
+API documentation generated from code (OpenAPI/Swagger at /docs).
+A penetration test report with no critical/high issues.
+A short admin operations guide (start/stop, backup/restore, add a tenant).
+A recorded walkthrough of each acceptance criterion passing.
+
+Protect yourself — contract advice
+Tie each milestone payment to its acceptance criteria, demonstrated live.
+Keep the code in YOUR repository from day one — not the freelancer's.
+Require the security/DPDP work to be independently reviewed; biometric data carries real legal liability under DPDP.
+This is general guidance, not legal advice — have a lawyer review the build contract.
+
+End of Build Plan & Acceptance
+

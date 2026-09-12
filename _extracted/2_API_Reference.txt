@@ -1,0 +1,477 @@
+﻿
+Document 1 of 6
+API Reference
+Complete REST API Specification
+Every endpoint, request, response, and error — build-ready
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Part 1
+API Conventions
+
+1. Conventions
+All endpoints share these rules. Read this section first; it is assumed everywhere else.
+1.1 Base URL & versioning
+All API routes are prefixed with the version. The base differs by deployment:
+On-premise:  https://<client-host>/api/v1
+Cloud:       https://<tenant>.biocore.app/api/v1
+ 
+All paths in this document are relative to the /api/v1 prefix.
+
+1.2 Authentication
+The platform uses server-side sessions delivered as HttpOnly cookies — NOT JWT in localStorage. This is the correct, secure model for a web-only product.
+Login returns a Set-Cookie header with an HttpOnly, Secure, SameSite=Strict session cookie.
+Every subsequent request automatically sends the cookie; the browser handles this.
+Mutating requests (POST/PUT/PATCH/DELETE) must also send an X-CSRF-Token header obtained from GET /auth/csrf.
+Kiosk devices authenticate with a long-lived device token in a cookie, set when the device is paired.
+
+1.3 Standard response envelope
+Every response uses this envelope. Success and error are distinguished by the success field and HTTP status code.
+// Success
+{
+  "success": true,
+  "data": { ... },          // the actual payload
+  "request_id": "req_a1b2c3" // for tracing & audit
+}
+ 
+// Error
+{
+  "success": false,
+  "error": {
+    "code": "CONSENT_REQUIRED",
+    "message": "No active consent on file for this user.",
+    "details": { ... }       // optional, field-level info
+  },
+  "request_id": "req_a1b2c3"
+}
+
+1.4 Status codes
+Code
+Meaning
+When
+200
+OK
+Successful GET, PUT, PATCH, or action.
+201
+Created
+Successful POST that creates a resource.
+400
+Bad request
+Malformed input, validation failure.
+401
+Unauthorized
+No valid session / not logged in.
+403
+Forbidden
+Logged in but lacks permission, or no consent.
+404
+Not found
+Resource does not exist (or not in this tenant).
+409
+Conflict
+Duplicate (e.g. email already registered).
+422
+Unprocessable
+Image quality failed, liveness failed.
+429
+Too many requests
+Rate limit exceeded.
+500
+Server error
+Unhandled error — log and alert.
+
+1.5 Multi-tenancy rule
+Critical — tenant isolation
+Every request is automatically scoped to the caller's tenant via their session.
+A query must NEVER return data from another tenant. Enforce this at the database query layer, not just the API.
+The tenant_id is taken from the session — never from a request parameter the client could forge.
+
+1.6 Pagination, filtering, rate limits
+Pagination: list endpoints accept ?page=1&page_size=50 (max 200). Response includes data.items, data.total, data.page.
+Filtering: common filters are ?from=DATE&to=DATE&department=X&status=Y.
+Rate limits: default 100 requests/minute per session; the face-search endpoint is 30/minute per device. 429 on exceed.
+
+Part 2
+Authentication Endpoints
+
+2. Authentication
+2.1 Get CSRF token
+GET
+/auth/csrf
+
+Returns a CSRF token that must be sent in the X-CSRF-Token header on all mutating requests. Call once after login and reuse for the session.
+Response 200:
+{ "success": true, "data": { "csrf_token": "csrf_x9y8z7" } }
+
+2.2 Admin / staff login
+POST
+/auth/login
+
+Email + password login for admin and staff roles. Returns a session cookie. 2FA (TOTP) is mandatory for admin roles.
+Request body:
+{
+  "email": "admin@acme.com",
+  "password": "••••••••",
+  "totp_code": "123456"      // required for admin roles
+}
+ 
+Response 200: Set-Cookie: session=...; HttpOnly; Secure; SameSite=Strict
+{
+  "success": true,
+  "data": {
+    "user_id": "usr_001", "role": "entity_admin",
+    "tenant_id": "ten_acme", "name": "Priya Iyer"
+  }
+}
+
+2.3 Member login (OTP)
+POST
+/auth/otp/request
+
+POST
+/auth/otp/verify
+
+Self-registered members log in with email + OTP — no password to manage. First call requests the OTP, second verifies it and creates the session.
+POST /auth/otp/request  body: { "email": "rahul@acme.com" }
+Response 200: { "success": true, "data": { "expires_in": 600 } }
+ 
+POST /auth/otp/verify   body: { "email": "rahul@acme.com", "otp": "482910" }
+Response 200: Set-Cookie + { "success": true, "data": { "user_id": "..." } }
+
+2.4 Logout
+POST
+/auth/logout
+
+Destroys the server-side session and clears the cookie.
+
+Part 3
+Enrollment & Face Endpoints
+
+3. Enrollment & face authentication
+These endpoints wrap the ZepIris engine. They handle self-registration, admin-assisted enrollment, and the core check-in face search.
+3.1 Self-registration
+POST
+/register
+
+Creates a pending account from the registration form. Must be followed by email verification and face enrollment before the account is active.
+Request body:
+{
+  "org_code": "ACME-2026",
+  "first_name": "Rahul", "last_name": "Kumar",
+  "email": "rahul@acme.com",
+  "department": "Engineering",
+  "member_id": "EMP-4821"        // optional
+}
+ 
+Response 201:
+{ "success": true, "data": { "user_id": "usr_92", "status": "pending_email" } }
+ 
+Errors: 409 EMAIL_EXISTS, 400 INVALID_ORG_CODE
+
+3.2 Record consent
+POST
+/consent
+
+Records DPDP consent. MUST be called before any face capture. Stores purpose, method, and the four consent acknowledgements.
+Request body:
+{
+  "user_id": "usr_92",
+  "purpose": "attendance",
+  "method": "self",            // or "admin_assisted"
+  "acknowledgements": {
+    "purpose_understood": true,
+    "sensitivity_understood": true,
+    "rights_understood": true,
+    "freely_given": true
+  }
+}
+ 
+Response 201: { "success": true, "data": { "consent_ref": "CNS-2026-84217" } }
+
+3.3 Enroll face
+POST
+/faces/enroll
+
+Captures a face for a user. The image is sent as base64. ZepIris runs quality + liveness checks, generates the vector, stores it, and deletes the raw image. Requires consent on file (else 403).
+Request body:
+{
+  "user_id": "usr_92",
+  "image": "data:image/jpeg;base64,/9j/4AAQ...",
+  "enrolled_by": "self"        // or admin user_id
+}
+ 
+Response 201:
+{
+  "success": true,
+  "data": {
+    "face_id": "fac_771", "vector_stored": true,
+    "quality": { "blur": "pass", "liveness": "pass", "face_detected": true }
+  }
+}
+ 
+Errors: 403 CONSENT_REQUIRED, 422 IMAGE_QUALITY_FAILED, 422 LIVENESS_FAILED
+
+3.4 Face search (the check-in call)
+POST
+/faces/search
+
+The most-called endpoint. A kiosk sends a frame; the platform identifies the person and records an attendance event via toggle logic. This single call does match + record.
+Request body (from a kiosk device):
+{
+  "image": "data:image/jpeg;base64,/9j/4AAQ...",
+  "device_id": "dev_gate01",
+  "action": "auto"          // auto = toggle in/out; or "in"/"out"
+}
+ 
+Response 200 (match):
+{
+  "success": true,
+  "data": {
+    "match": true, "user_id": "usr_92", "name": "Rahul Kumar",
+    "score": 0.94, "event": "check_in",
+    "timestamp": "2026-06-15T09:02:11+05:30",
+    "blacklist_hit": false
+  }
+}
+ 
+Response 200 (no match):
+{ "success": true, "data": { "match": false, "score": 0.28 } }
+ 
+Errors: 422 IMAGE_QUALITY_FAILED, 403 SPOOF_DETECTED
+
+3.5 Admin-assisted enrollment
+POST
+/admin/enroll
+
+Admin enrolls a person (patient, inmate, citizen, devotee, visitor, guardian) on their behalf. Records the admin identity, person type, purpose, and consent method in the audit trail.
+Request body:
+{
+  "person_type": "patient",
+  "first_name": "Arun", "last_name": "Sharma",
+  "reference_id": "PAT-4821",
+  "purpose": "Patient identity verification",
+  "image": "data:image/jpeg;base64,...",
+  "consent_method": "in_person_verbal",
+  "expiry_date": "2026-12-31",     // optional, null = permanent
+  "extra": { "ward": "Cardiology" } // type-specific fields
+}
+ 
+Response 201:
+{ "success": true, "data": { "user_id": "pat_55", "consent_ref": "CNS-ADM-2291" } }
+
+Part 4
+Attendance Endpoints
+
+4. Attendance
+4.1 List attendance
+GET
+/attendance
+
+Returns attendance records for the tenant, filterable. Used by the admin dashboard attendance log.
+Query: ?from=2026-06-01&to=2026-06-15&department=Engineering&page=1
+ 
+Response 200:
+{
+  "success": true,
+  "data": {
+    "items": [
+      { "user_id": "usr_92", "name": "Rahul Kumar",
+        "check_in": "09:02", "check_out": null,
+        "duration_minutes": null, "status": "inside",
+        "date": "2026-06-15", "device_id": "dev_gate01" }
+    ],
+    "total": 47, "page": 1, "page_size": 50
+  }
+}
+
+4.2 Manual event (correction)
+POST
+/attendance/manual
+
+Lets an admin add or correct an attendance event (e.g. a missed check-out). Logged in the audit trail with the admin's identity and a reason.
+Request body:
+{
+  "user_id": "usr_92", "event": "check_out",
+  "timestamp": "2026-06-15T17:30:00+05:30",
+  "reason": "Missed scan — confirmed by supervisor"
+}
+
+4.3 Break events
+POST
+/attendance/break
+
+Records break_start or break_end. Productive time = total duration minus break duration.
+Body: { "device_id": "dev_floor", "image": "...", "break": "start" }
+
+4.4 Live presence (emergency headcount)
+GET
+/attendance/presence
+
+Returns everyone currently inside, in real time. Powers the emergency headcount feature.
+Response 200:
+{ "success": true, "data": {
+  "inside_count": 31, "by_zone": { "floor_a": 18, "office": 13 },
+  "people": [ { "user_id": "usr_92", "name": "Rahul Kumar", "since": "09:02" } ]
+} }
+
+Part 5
+Users, Zones, Badges, Devices, Visitors
+
+5. Resource endpoints
+These follow standard REST patterns. Each resource supports list, get, create, update, delete unless noted. All are tenant-scoped and require appropriate role permissions.
+5.1 Users
+GET
+/users
+
+GET
+/users/{id}
+
+PATCH
+/users/{id}
+
+DELETE
+/users/{id}
+
+List and manage users. DELETE triggers the full erasure cascade (see DPDP doc). PATCH updates role, badge, department, status.
+
+5.2 Zones
+GET
+/zones
+
+POST
+/zones
+
+PATCH
+/zones/{id}
+
+POST /zones body:
+{
+  "name": "Server Room", "type": "restricted",
+  "access_rule": { "allowed_badges": ["it_staff"],
+                   "time_windows": [{"from":"08:00","to":"20:00"}] },
+  "door_webhook_url": "http://192.168.1.50/open"  // optional
+}
+
+5.3 Badges
+GET
+/badges
+
+POST
+/badges
+
+POST /badges body:
+{
+  "name": "Doctor", "zones": ["icu","ot","med_store"],
+  "time_rule": "always", "expiry": null, "print_badge": true
+}
+
+5.4 Devices (kiosks)
+GET
+/devices
+
+POST
+/devices
+
+POST
+/devices/{id}/disable
+
+POST /devices body:
+{ "name": "KIOSK-GATE-01", "zone_id": "zone_gate",
+  "capture_method": "webcam" }   // or "rtsp"
+ 
+Response 201: { "success": true, "data": {
+  "device_id": "dev_gate01", "pairing_token": "pair_xyz",
+  "kiosk_url": "https://.../kiosk?token=pair_xyz" } }
+
+5.5 Visitors
+POST
+/visitors/invite
+
+POST
+/visitors/enroll
+
+invite generates a QR/link with an expiry; enroll captures the visitor face against that token. Auto-expires and deletes at window end.
+
+5.6 Blacklist
+GET
+/blacklist
+
+POST
+/blacklist
+
+Manages blacklisted faces. Every face search checks this collection in parallel; a hit raises an immediate alert.
+
+Part 6
+DPDP, Reports & Webhooks
+
+6. DPDP, reporting & integration
+6.1 DPDP — data subject rights
+GET
+/me/data/export
+
+POST
+/me/data/erasure
+
+POST
+/me/consent/revoke
+
+Self-service endpoints for the rights guaranteed by DPDP. export returns all the user's data; erasure triggers the verified cascade delete and returns a certificate reference.
+POST /me/data/erasure  (requires OTP re-auth)
+Response 200:
+{ "success": true, "data": {
+  "erasure_ref": "ERA-2026-00047",
+  "stores_cleared": ["milvus","minio","postgres","redis"],
+  "certificate_url": "/certificates/ERA-2026-00047.pdf" } }
+
+6.2 Reports
+GET
+/reports/attendance
+
+GET
+/reports/export
+
+Generate dashboards and exports. export accepts ?format=pdf|excel|csv and the same filters as the attendance list.
+
+6.3 Outbound webhooks
+The platform can POST events to client-configured URLs — for door controllers, ERP sync, and badge printers. Configure under /settings/webhooks.
+Event
+Fired when
+Typical consumer
+access.granted
+Face match passes a zone rule
+Door controller / barrier
+access.denied
+Recognised but not permitted
+Security log / alert
+attendance.recorded
+Any check-in/out
+ERP / HR sync
+blacklist.hit
+Blacklisted face seen
+Security alert system
+visitor.arrived
+Visitor checks in
+Host notification
+badge.print
+Badge print requested
+Local badge printer
+
+Webhook payload example (access.granted):
+{
+  "event": "access.granted", "user_id": "usr_92",
+  "zone_id": "zone_gate", "device_id": "dev_gate01",
+  "timestamp": "2026-06-15T09:02:11+05:30",
+  "signature": "sha256=..."   // HMAC for verification
+}
+
+Webhook security
+Every webhook is signed with an HMAC-SHA256 signature in the signature field.
+The consumer must verify the signature using the shared secret before acting.
+Failed deliveries retry 3 times with backoff, then go to a dead-letter log.
+
+End of API Reference
+

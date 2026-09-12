@@ -1,0 +1,720 @@
+﻿
+BioCore Platform
+Face Authentication & Attendance Platform
+Complete System & Operations Documentation
+Architecture · User Types · Onboarding · Zones · Badges · Vertical Playbooks
+Document version
+1.0
+Status
+Master specification
+Audience
+Developers · Sales · Onboarding · Clients
+Compliance
+DPDP Act 2026
+Deployment
+On-premise + Cloud
+
+Contents
+TOC \h \o "1-3"
+
+
+Part 1
+Introduction & How Everything Works
+
+1. Introduction
+BioCore is a web-based face authentication and attendance platform. It lets people prove who they are with a selfie instead of cards, PINs, fingerprints, or paper registers. It is built on ZepIris, an open-source face authentication engine, and is designed to run at operational scale on ordinary hardware — a webcam, a tablet, or an IP camera is enough.
+This document is the single source of truth for the platform. It is written for four audiences at once: developers who build and maintain it, the sales team who position and sell it, the onboarding team who set up new clients, and the client administrators who run it day to day. Where a section is specific to one audience, it is marked.
+What this platform replaces
+Paper attendance registers and manual muster rolls.
+Punch cards, RFID cards, and PIN keypads that can be shared or lost.
+Fingerprint scanners that fail with dust, sweat, or worn prints.
+“Buddy punching” — one person clocking in on behalf of another.
+
+1.1 The core idea in one paragraph
+A person enrolls their face once. From then on, they walk up to any shared terminal (a “kiosk”), look at the camera, and the system recognises them in under two seconds and records a check-in or check-out. The organisation administrator watches all of this live from a web dashboard, runs reports, and configures the system — but never has to physically operate a device. Everything is web-based; there is no mobile app to install.
+1.2 The three actors
+Every deployment, in every industry, is built around the same three actors. Understanding these three is the key to understanding the whole platform.
+Actor
+Who they are
+What they do
+The person
+Employee, student, member, patient, visitor
+Enrolls their face once, then looks at a camera to check in or out.
+The kiosk
+A shared, always-on terminal (tablet, PC, or IP camera)
+Scans every face, matches it, and records the attendance event. No login per person.
+The admin / entity
+The organisation running the system
+Watches everything live from a dashboard, runs reports, configures zones, badges, and devices.
+
+1.3 The end-to-end flow
+Here is exactly what happens, in order, across the life of a deployment:
+Onboarding — the entity (a school, hotel, factory) is set up on the platform with its own isolated tenant, branding, and configuration.
+Registration — each person enrolls their face, either by themselves (self-registration) or with help from an admin (admin-assisted enrollment).
+Daily use — people check in and out at shared kiosks throughout the day. Each scan is matched, recorded, and pushed live to the dashboard.
+Monitoring — the admin watches live attendance, gets alerts (late arrival, unrecognised face, device offline), and runs reports.
+Administration — the admin manages users, creates zones and badges, configures devices, exports payroll, and handles DPDP requests (data access, erasure).
+
+Key design principle — the backend never changes
+The entire backend (ZepIris ML, databases, storage, queues) is identical for a school, a hotel, a factory, or a hospital.
+Only the configuration and a few optional modules differ per industry.
+This means one codebase serves all verticals — lower maintenance, faster onboarding, consistent behaviour.
+
+Part 2
+Deep System Architecture
+
+2. System architecture
+The platform is built as a set of independent services that each do one job and talk to each other over the network. This is called a microservice architecture. It lets each part scale on its own — for example, the face-matching service can run on more powerful hardware than the rest — and lets the team update one part without touching the others.
+2.1 The layers
+The system is organised into nine layers. A request flows from the top (the browser) down through each layer and back up again.
+Layer
+Components
+Responsibility
+1. Client
+Admin dashboard, employee portal, kiosk tab
+Everything the user sees, all in a web browser.
+2. API gateway
+Nginx, rate limiter, SSL
+Single entry point. Checks SSL, rate limits, routes traffic.
+3. Microservices
+Face auth, attendance, access, visitor, HR, notifications, reporting, multi-tenant
+The business logic. Each is independent.
+4. ML inference
+ZepIris: embedding, spoof, blur, nudity, PPE
+The AI models that turn a face image into a match.
+5. Data
+PostgreSQL, Milvus, MinIO, Redis
+Stores structured data, face vectors, images, and cache.
+6. Integration
+REST API, webhooks, ERP, hardware, messaging
+Connects to outside systems and physical hardware.
+7. Infrastructure
+Docker, Kubernetes, Nginx, RabbitMQ
+Runs, scales, and routes everything.
+8. Deployment
+On-premise, cloud, hybrid
+Where the system physically runs.
+9. Monitoring
+Grafana, Prometheus, audit logs, security
+Watches health, records every action, enforces security.
+
+2.2 Each service explained
+Face authentication service
+Handles enrollment and verification. When a face image arrives, it coordinates with the ML inference layer to check image quality and generate a face vector, then stores or searches that vector in the Milvus database. It is the heart of the platform.
+Attendance service
+Records check-in and check-out events. It applies the “toggle logic” that decides whether a scan is an entry or an exit based on the person's last event. It calculates durations, flags late arrivals, and handles shifts, overtime, and breaks.
+Access control service
+Decides whether a recognised person is allowed into a particular zone at a particular time, based on their role and the zone's rules. On a positive decision it can trigger a physical door or barrier through the integration layer.
+Visitor management service
+Handles people who are not permanent members — walk-in visitors, delivery agents, event delegates. It issues temporary, time-limited enrollments through QR codes or links that auto-expire.
+HR & payroll service
+Turns attendance data into useful HR outputs: leave balances, shift schedules, wage calculations for hourly and daily workers, and payslip-ready exports.
+Notification service
+Sends alerts through browser notifications, email, SMS, and optionally WhatsApp. It applies priority routing so that critical alerts (a breach, an unrecognised face) go out instantly while routine ones (a successful check-in) are lower priority.
+Reporting service
+Generates dashboards, scheduled reports, and exports in PDF, Excel, and CSV. It is read-only — it never changes data, only summarises it.
+Multi-tenant service
+Keeps every client organisation's data completely separate. A school's data is invisible to a hotel on the same platform. It also handles per-tenant branding, subscription plans, and billing.
+
+2.3 The data stores
+The platform uses four different storage systems, each chosen for a specific job.
+Store
+Technology
+What it holds
+Why this one
+Structured data
+PostgreSQL
+Users, tenants, attendance logs, consent, audit
+Reliable, relational, transaction-safe.
+Face vectors
+Milvus
+512-number face embeddings
+Built for fast 1-to-N similarity search.
+Images & files
+MinIO
+Face images, documents, receipts
+S3-compatible, self-hosted object storage.
+Cache & sessions
+Redis
+Login sessions, rate limits, hot data
+In-memory, extremely fast.
+
+How a face becomes a match — plain English
+1. The camera captures an image and sends it to the platform.
+2. ZepIris checks the image is sharp, real (not a photo of a photo), and appropriate.
+3. ZepIris converts the face into a list of 512 numbers — a “vector” — that uniquely describes it.
+4. Milvus compares that vector against every enrolled vector and returns the closest matches with a score.
+5. If the top score is above the threshold (default 0.5), it's a match. The person is identified.
+
+Part 3
+User Types & Roles
+
+3. User types
+The platform recognises twelve distinct types of user. Each type has a different relationship to the system, a different way of being added, and a different set of permissions. Understanding these twelve is essential for onboarding, sales, and development alike.
+3.1 The twelve user types at a glance
+#
+User type
+Human?
+How they are added
+Core purpose
+1
+Super admin
+Yes
+Platform team creates
+Owns the whole platform, manages all entities
+2
+Entity admin
+Yes
+Created at onboarding
+Runs one client organisation
+3
+Manager / supervisor
+Yes
+Entity admin invites
+Limited admin — one dept, branch, or zone
+4
+Contractor sub-admin
+Yes
+Entity admin invites
+Manages their own workers under a parent entity
+5
+HR / payroll
+Yes
+Entity admin invites
+Sees attendance + wage data, exports payroll
+6
+Auditor / DPO
+Yes
+Entity admin invites
+Read-only compliance + audit access
+7
+Security / reception
+Yes
+Entity admin invites
+Operates kiosk, enrolls visitors, handles alerts
+8
+Self-registered user
+Yes
+Registers themselves
+Employee, student, member, worker
+9
+Admin-enrolled person
+Yes
+Admin enrolls them
+Patient, inmate, citizen, devotee
+10
+Guardian
+Yes
+Self-enrolls via link
+Verified to pick up a linked student
+11
+Visitor
+Yes
+Temp QR / link
+Time-limited access, auto-expires
+12
+Kiosk device
+No
+Admin registers device
+A terminal — a non-human identity
+
+Permission model — presets plus custom
+Every user type ships with a sensible default permission set (a “preset”).
+Entity admins can also build fully custom roles — picking any combination of permissions — when the presets don't fit.
+Example: a “Night shift supervisor” custom role might see only one zone, only between 8 PM and 6 AM.
+
+3.2 The administrative roles in detail
+Super admin (platform owner)
+This is the platform operator — the company that owns and runs BioCore. The super admin can see and manage every client entity, provision new tenants, set global policies, and access platform-wide health and billing. No client ever has this role. It is held only by the platform team.
+Sees: all entities, all devices, global metrics, billing.
+Can: create / suspend entities, set global config, manage platform staff.
+Cannot: read a tenant's biometric data without an explicit, audited support grant.
+Entity admin (client organisation)
+The top administrator inside one client — the school principal, the hotel general manager, the factory HR head. This person controls everything within their own organisation but can never see another organisation's data.
+Sees: all users, attendance, zones, devices, reports, and settings within their entity.
+Can: invite managers and staff, create zones and badges, register devices, configure DPDP settings, run admin-assisted enrollment.
+Manager / supervisor
+A limited administrator scoped to a slice of the organisation — one department, one branch, or one set of zones. A factory floor supervisor sees only their shift; a school's class teacher sees only their class.
+Contractor sub-admin
+A special administrator for the construction, factory, and logistics verticals. A contractor brings their own crew of workers onto a client's site. The contractor sub-admin manages only their own workers, sees only their own attendance and wage data, but operates under the parent entity's umbrella and rules.
+HR / payroll
+Sees attendance and wage data and can export payroll, but has no control over devices, zones, or security alerts. This separation means the payroll team gets exactly what it needs and nothing more.
+Auditor / DPO (Data Protection Officer)
+A strictly read-only role required by the DPDP Act 2026. The auditor or DPO can review every audit log, every consent record, and every data-access event, but cannot change any operational data. This independence is what makes the compliance trail trustworthy.
+Security / reception operator
+The person at the front desk or security post. They operate kiosks, enroll walk-in visitors, respond to alerts (an unrecognised face, a blacklisted person), but cannot see payroll, reports, or system settings.
+
+3.3 The enrolled-person roles in detail
+Self-registered user
+The most common type. Employees, students, gym members, and contract workers register themselves on a browser using their organisation code, verify by email OTP, give consent, and capture their own face. No admin involvement is needed. This is the default and the fastest path.
+Admin-enrolled person
+Some people cannot or should not self-register — a hospital patient, a prison inmate, a citizen at a government counter, a devotee at a temple. For these, an administrator enrolls them in person, capturing their face and recording their consent on their behalf. This is covered in full in the onboarding section.
+Guardian
+A parent or guardian linked to a student, used by schools for pickup verification. The guardian self-enrolls from home via a secure link sent by the school. At pickup time, the kiosk matches the guardian's face and confirms the student link before the child is released.
+Visitor
+A temporary, time-limited identity. A visitor receives a QR code or link, captures their face at reception, and is granted access for a fixed window (say four hours). After that, the enrollment automatically expires and the data is deleted. No organisation code is needed.
+Kiosk device (non-human)
+A kiosk is itself a registered identity — but not a person. The entity admin registers each terminal with a device token so the platform knows which device recorded which event, and so an offline or tampered device can be detected and disabled. The kiosk has no login screen for end users.
+
+Why visitors and kiosks are “users” too
+Treating visitors and devices as first-class identities means every action in the system traces back to a known identity — a person or a device.
+This is what makes the DPDP audit trail complete: who (or what) did what, when, and from where.
+
+Part 4
+Onboarding an Entity
+
+4. Onboarding a new entity
+“Onboarding an entity” means setting up a new client organisation — a school, a hotel, a factory, an event — on the platform. This is done by the onboarding team together with the client's chosen entity admin. It happens once per client and typically takes a few hours to a few days depending on size.
+4.1 The onboarding checklist
+Every entity, regardless of industry, goes through the same eight steps.
+Create the tenant — the super admin provisions an isolated tenant with a unique organisation code (e.g. ACME-2026).
+Appoint the entity admin — the client nominates one person who becomes the top administrator.
+Apply branding — logo, colours, and the organisation's name are set so every screen looks like the client's own.
+Choose the vertical preset — select School, Hotel, Factory, etc. This pre-loads the right modules, roles, and defaults.
+Configure DPDP settings — name the data fiduciary, set the Data Protection Officer's email, set retention periods.
+Register devices — each kiosk terminal is registered and assigned to a zone.
+Create zones and badges — define the physical or logical areas and the access levels (covered in Part 5).
+Invite staff and open registration — invite managers, then open self-registration to all members via the organisation code.
+
+4.2 What the client must provide
+Item
+Why it's needed
+Example
+Organisation name & logo
+Branding across all screens
+Acme Public School
+Data fiduciary details
+DPDP legal requirement
+Acme Corp Pvt. Ltd.
+DPO contact
+DPDP grievance handling
+privacy@acme.com
+List of zones
+To configure access control
+Main gate, library, hostel
+List of devices
+To register each kiosk
+2 tablets, 1 IP camera
+Member list (optional)
+For bulk pre-enrollment
+CSV of 500 students
+Shift / timing rules
+Late thresholds, shift windows
+School starts 09:00
+
+4.3 The vertical preset
+When the onboarding team picks a vertical preset, the platform automatically configures itself for that industry. This is what makes onboarding fast and consistent.
+Preset chooses
+Example for a school
+Example for a hotel
+Default user types
+Student, teacher, staff, guardian
+Staff, guest, visitor
+Enabled modules
+Class timetable, guardian pickup
+Visitor temp-enroll, room access
+Default roles
+Teacher, class coordinator, principal
+Front desk, housekeeping, GM
+Default zones
+Gate, library, lab, hostel
+Lobby, floors, kitchen, pool
+Notification rules
+Parent SMS on absence
+Host alert on guest arrival
+
+Part 5
+Zones, Devices & Badges
+
+5. Zones, devices, and badges
+Three building blocks let one platform model any physical environment — a single-room gym or a multi-building hospital campus. These are zones, devices, and badges. This part explains what each is and exactly how to create them.
+5.1 Zones
+A zone is a named area that access is controlled for. It can be physical (a server room, a hostel, a backstage area) or logical (a department, a shift group). Every kiosk belongs to a zone, and every person's access is defined in terms of zones.
+How to create a zone
+Open the admin dashboard and go to Settings › Zones.
+Click “Add zone” and give it a name (e.g. “ICU”, “Main gate”, “VIP lounge”).
+Choose the zone type — entry/exit, restricted, or amenity.
+Set the access rule — which roles or badges may enter, and at which times.
+Optionally link a physical door controller so a positive match opens the door.
+Assign one or more devices (kiosks) to the zone.
+
+Zone access rule — worked example
+Zone: “Server room” (restricted).
+Rule: only the “IT staff” badge may enter, only between 08:00 and 20:00.
+Anyone else who is recognised at the server-room kiosk is denied and an alert is raised.
+An unrecognised face triggers an immediate security alert.
+
+Zone types
+Zone type
+Purpose
+Example
+Entry / exit
+Records attendance, optional door open
+Main gate, factory entrance
+Restricted
+Allows only specific badges/roles
+Server room, ICU, vault, armoury
+Amenity
+Access to a shared facility
+Gym, pool, library, lounge
+
+5.2 Devices (kiosks)
+A device is a registered terminal that runs the check-in screen. It can be a tablet, a desktop with a webcam, or an IP camera feeding a server. Each device is registered once and then runs unattended.
+How to register a device
+Go to Settings › Devices and click “Register device”.
+Name the device (e.g. “KIOSK-GATE-01”) and assign it to a zone.
+Choose the capture method — browser webcam or IP camera (RTSP).
+The platform issues a device token; open the kiosk URL on that terminal and it pairs automatically.
+Put the terminal into full-screen kiosk mode so it cannot be navigated away from.
+
+Capture method
+Best for
+Hardware
+Browser webcam
+Desk workers, reception, small sites
+Any laptop / desktop / tablet with a camera
+IP camera (RTSP)
+Gates, factory floors, large entrances
+Dedicated IP camera + server frame extractor
+Tablet kiosk
+Wall-mounted entry points
+Android tablet in kiosk mode
+
+Device health & security
+Each device reports online/offline status to the dashboard in real time.
+If a device goes offline or is tampered with, the admin is alerted and the device can be remotely disabled.
+Every attendance event records which device captured it — part of the DPDP audit trail.
+
+5.3 Badges
+A badge is an access level — a named bundle of permissions that says which zones a person may enter and when. Instead of setting permissions person by person, you assign a badge, and everyone with that badge inherits its rules. Badges are the simplest way to manage access at scale.
+How to create a badge
+Go to Settings › Badges and click “Create badge”.
+Name it (e.g. “Doctor”, “VIP guest”, “Night shift”, “Contractor crew A”).
+Select the zones this badge may access.
+Set time windows — always, or only during certain hours/days.
+Optionally set an expiry (useful for visitors, contractors, trial members).
+Optionally enable badge printing so a physical badge is printed on first check-in.
+
+Badge examples by industry
+Badge
+Industry
+Grants access to
+Time rule
+Doctor
+Hospital
+ICU, OT, medicine store, wards
+Always
+VIP guest
+Hotel
+Lobby, room floor, lounge, pool
+Stay duration
+Night shift
+Factory
+Floor A, canteen
+20:00–06:00
+Contractor crew A
+Construction
+Site gate, zone 1
+Until project end
+Delegate
+Event
+Main hall, exhibition
+Event days only
+Trial member
+Gym
+Main floor only
+7-day expiry
+
+Badges vs roles — the difference
+A role controls what you can do in the software (e.g. “manager can run reports”).
+A badge controls where you can physically go (e.g. “doctor badge opens the ICU door”).
+A person has one role and can hold one or more badges.
+
+Part 6
+Onboarding a Person
+
+6. Onboarding a person
+There are two ways a person joins the system: they enroll themselves (self-registration), or an admin enrolls them (admin-assisted enrollment). The right path depends on who the person is. This part covers both in full detail, step by step.
+6.1 Which path to use
+If the person is...
+Use this path
+Why
+Employee, student, member, worker
+Self-registration
+They have a device and can enroll themselves
+Patient, inmate, citizen, devotee
+Admin-assisted
+They cannot or should not self-register
+Guardian (school)
+Self-registration via link
+Enrolls from home, linked to a student
+Walk-in visitor, delivery agent
+Visitor temp-enroll
+Time-limited, no full account needed
+Event delegate (pre-known)
+Bulk import
+Imported from a list, face captured at desk
+
+6.2 Self-registration — step by step
+This is the default path. The person does everything themselves on any browser; no admin is involved.
+The person opens the registration page and enters the organisation code, their name, and work email.
+They verify their email with a one-time code (OTP) sent to their inbox.
+They read the DPDP consent notice and tick the required consent boxes.
+They enable their webcam and capture their face. The system checks the image is sharp, real, and shows a face.
+The raw photo is deleted; only the 512-number vector is kept. The person receives a confirmation and a user ID.
+
+DPDP at registration
+Consent is collected before any face is captured — never after.
+Four consent items are mandatory: purpose, sensitivity acknowledgement, rights awareness, free consent.
+A non-biometric alternative (e.g. manual attendance) is always offered — consent can never be forced.
+
+6.3 Admin-assisted enrollment — step by step
+Used when the person cannot self-register. An administrator enrolls them in person, with the person physically present, and records consent on their behalf. This unlocks the hospital, prison, government, and religious verticals.
+The admin opens Admin › Enroll and selects the person type (patient, inmate, citizen, devotee, visitor, guardian).
+The admin fills in the person's details and the explicit purpose of enrollment.
+The admin confirms four things: the person is present, the purpose was explained, the person consented verbally or in writing, and the admin takes responsibility.
+The admin captures the person's face on the webcam. The same quality checks apply.
+Optionally a signed consent form is scanned and attached. An enrollment record and consent reference are generated, with the admin's identity logged.
+
+Audit trail for admin enrollment
+Every admin-assisted enrollment records: which admin, which person, the stated purpose, the consent method, and the timestamp.
+If an expiry is set (common for visitors and patients), the data auto-deletes on that date.
+This satisfies the DPDP requirement that consent collected on someone's behalf is fully traceable.
+
+6.4 Visitor temporary enrollment
+For walk-ins who need access for only a few hours. No full account is created and no organisation code is needed.
+Reception generates a QR code or temporary link for the visitor.
+The visitor scans the QR at a reception kiosk or opens the link, enters their name and phone number.
+Their face is captured and a temporary enrollment is created, valid for a set window (e.g. four hours).
+When the window ends, the enrollment auto-expires and the face data is deleted. A full audit record is kept.
+
+6.5 Bulk import (events, large rollouts)
+When an entity already has a list of people — an event with 2,000 pre-registered delegates, or a school with 500 students — the list can be imported in one operation.
+The admin uploads a CSV or Excel file with names, IDs, and emails.
+The platform creates accounts for everyone in the list.
+Each person completes face capture either at a registration desk (admin-assisted) or via a personal link (self-service).
+Until face capture is complete, the account is “pending” and cannot check in.
+
+Part 7
+Service Delivery Playbooks
+
+7. How to deliver the service to a vertical
+This part is the practical playbook for the sales and onboarding teams. For each industry it answers: who are the users, what zones and badges to set up, what modules to enable, and what to watch out for. Three representative verticals are documented in full — School, Hotel, and Event — followed by a quick-reference table for the rest.
+7.1 School / college
+A school deployment tracks student and staff attendance, controls campus access, and verifies guardians at pickup.
+Users
+Students — self-register with student ID (or bulk-imported, then face-captured in class).
+Teachers and staff — self-register like employees.
+Guardians — self-enroll from home via a link, linked to their child.
+Principal — entity admin. Class coordinators — managers scoped to their class.
+Zones to create
+Main gate (entry/exit), library (amenity), each lab (restricted), hostel (entry/exit), exam hall (restricted).
+Badges to create
+Student, Teacher, Hostel resident, Lab-access, Guardian.
+Modules to enable
+Class timetable (per-period attendance), guardian pickup verification, parent notifications.
+School — watch out for
+Per-period attendance needs the timetable module — plain daily check-in is not enough for class registers.
+Guardian pickup needs guardians enrolled before the first pickup day — send links a week ahead.
+For under-18 students, parental consent is required under DPDP — capture it during bulk import.
+
+7.2 Hotel / hospitality
+A hotel deployment focuses on staff attendance, department tracking, and — for loyalty members — guest recognition. Walk-in guests use temporary enrollment.
+Users
+Staff — self-register (front desk, housekeeping, kitchen, etc.).
+Loyalty guests — self-register to opt into recognition.
+Walk-in guests — visitor temp-enrollment at reception.
+General manager — entity admin. Department heads — managers.
+Zones to create
+Lobby (entry), each floor (restricted by room badge), kitchen (restricted), back office (restricted), pool/gym (amenity).
+Badges to create
+Front desk, Housekeeping, Kitchen, VIP guest, Standard guest.
+Modules to enable
+Visitor temp-enrollment, department tracking, optional smart-lock door integration.
+Hotel — watch out for
+Room access needs smart-lock hardware integration — confirm the client's lock brand supports webhooks.
+Guest recognition is opt-in only — never enroll a guest's face without explicit consent.
+Walk-in enrollments should expire at checkout — set the badge expiry to the stay duration.
+
+7.3 Event / exhibition / conference
+An event deployment is short-lived and high-volume. Delegates are usually pre-registered and imported in bulk; zone access and badge printing are common.
+Users
+Delegates — bulk-imported, face captured at the registration desk.
+Speakers / VIPs — separate badge with backstage access.
+Press / media — separate badge.
+Event staff and vendors — self-register or admin-enroll.
+Event organiser — entity admin (tenant is created just for the event).
+Zones to create
+Main hall (entry), exhibition floor (entry), stage/backstage (restricted), VIP lounge (restricted), speaker room (restricted).
+Badges to create
+Delegate, VIP, Speaker, Press, Staff, Vendor — each mapped to the zones it may enter.
+Modules to enable
+Bulk import, badge printing on check-in, multi-zone access, real-time footfall dashboard.
+Event — watch out for
+Walk-in delegates without pre-registration need on-the-spot enrollment at the desk — staff the desk accordingly.
+Badge printing needs a printer reachable by webhook — test it before doors open.
+The tenant and all delegate data should be set to auto-delete a fixed period after the event ends (DPDP).
+
+7.4 Quick reference — all other verticals
+The same pattern applies to every other industry. This table summarises the key setup choices for each.
+Vertical
+Primary users
+Key zones
+Key modules
+Office
+Employees, managers, HR
+Gate, floors, server room, meeting rooms
+Leave, payroll export, door access
+Hospital
+Doctors, nurses; patients (admin-enrolled)
+ICU, OT, medicine store, wards
+Admin enrollment, shift, on-call
+Factory
+Workers, contractor crews
+Gate, floor zones, hazardous zones
+Shifts, wage calc, PPE, headcount
+Warehouse
+Shift workers, delivery agents
+Dock, cold storage, inventory
+Break tracking, GPS, zone logs
+Bank
+Branch staff
+Vault, cash counter, server room
+Door access, audit (staff only)
+Construction
+Daily labour, contractors
+Site gate, work zones
+Wage calc, multi-contractor, headcount
+Retail / mall
+Store staff
+Store room, cash counter, stock room
+Multi-store, blacklist alert
+Residential
+Residents, domestic staff, visitors
+Gate, lift, amenities, parking
+Visitor temp-enroll, blacklist
+Government
+Staff; citizens (admin-enrolled)
+Office, record room, treasury
+Admin enrollment, GPS field staff
+Gym / sports
+Members, trainers
+Entrance, locker, pool
+Membership billing, expiry check
+Religious
+Staff, volunteers; devotees
+Sanctum, donation counter
+Admin enrollment, donations, blacklist
+Logistics
+Drivers, warehouse staff
+Dock, zones
+GPS trip tracking, multi-location
+
+Out-of-scope verticals
+Prison and Military require continuous real-time location tracking and government-certified systems — they need a specialist build and partner.
+Bank KYC, airport boarding, and military clearance are regulatory walls — they require RBI / BCAS / MoD approval and licensed partners, not an independent build.
+These can still use the platform for staff attendance — just not for the regulated, citizen-facing identity use cases.
+
+Part 8
+DPDP Act 2026 Compliance
+
+8. DPDP Act 2026 compliance
+Biometric data is classified as Sensitive Personal Data under India's Digital Personal Data Protection Act 2026. The platform is built so that compliance is enforced by the system itself, not just by policy. This part lists the ten obligations and how each is met.
+#
+Obligation
+How the platform enforces it
+1
+Consent
+Collected before any face capture; every API call blocked without consent on file.
+2
+Data minimisation
+Only the 512-number vector is stored; raw photo deleted immediately.
+3
+Right to access
+Users download all their data from the self-service portal.
+4
+Right to erasure
+One request cascades a full delete across all stores; verified and certified.
+5
+Purpose limitation
+Biometrics used only for the stated purpose; cross-purpose use blocked at the gateway.
+6
+Security safeguards
+TLS 1.3 in transit; AES-256 at rest; spoof/liveness detection.
+7
+Audit trail
+Every action logged with a request ID; immutable; retained 3 years.
+8
+Breach notification
+Detected via monitoring; 72-hour notification workflow built in.
+9
+Data localisation
+All data stays in India — on-premise, or India-region cloud only.
+10
+Fiduciary duties
+DPO appointed; privacy notice published; grievance mechanism provided.
+
+8.1 The erasure cascade
+When a person requests erasure, the platform performs a verified, atomic deletion across every store. This is one of the most important compliance features and works as follows:
+The request is identity-verified (re-auth via OTP) before anything is deleted.
+The request is logged in the audit trail before deletion begins.
+The face vector (Milvus), face image (MinIO), and database records (PostgreSQL) are deleted in parallel.
+Each deletion is independently verified — the system confirms each store now returns nothing.
+The session cache is flushed, consent is revoked, a final audit entry is written, and the person receives an erasure certificate.
+
+What is NOT deleted on erasure
+Attendance logs are retained for 3 years where labour law requires it — but they are de-linked from biometric data.
+The audit log of the erasure itself is retained — proving the erasure happened is itself a compliance requirement.
+Everything that can identify the person biometrically is permanently destroyed.
+
+Part 9
+Glossary
+
+9. Glossary
+Plain-English definitions of every term used in this document.
+Term
+Meaning
+Entity / tenant
+One client organisation on the platform, fully isolated from others.
+Organisation code
+The unique code (e.g. ACME-2026) people use to register under the right entity.
+Kiosk
+A shared, always-on terminal that scans faces for check-in/out.
+Enrollment
+Capturing a person's face for the first time so they can be recognised later.
+Self-registration
+A person enrolling themselves on a browser, no admin needed.
+Admin-assisted enrollment
+An admin enrolling a person in their presence, with their consent.
+Face vector / embedding
+512 numbers that uniquely describe a face. The raw photo is not kept.
+1-to-N search
+Comparing one face against all enrolled faces to find who it is.
+Threshold
+The minimum match score (default 0.5) to count a face as recognised.
+Liveness / spoof check
+Confirming a real face is present, not a photo or screen.
+Zone
+A named area that access is controlled for (physical or logical).
+Device
+A registered terminal (tablet, PC, IP camera) running the kiosk.
+Badge
+An access level — which zones a person may enter and when.
+Role
+What a person may do in the software (vs a badge = where they may go).
+Toggle logic
+The rule that decides if a scan is a check-in or a check-out.
+DPDP
+Digital Personal Data Protection Act 2026 — India's data privacy law.
+DPO
+Data Protection Officer — the compliance contact required by DPDP.
+Data fiduciary
+The organisation legally responsible for the personal data.
+Erasure cascade
+The verified deletion of a person's data across every store.
+Multi-tenant
+One platform serving many isolated client organisations.
+
+End of document
+BioCore Platform — Complete System & Operations Documentation — v1.0
+

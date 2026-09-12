@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# SECRETS — never commit. `.env` holds LIVE billed KYC credentials
+# (key_live_/secret_live_), the BioVerify API key, the database password and the
+# session/CSRF signing secrets. Anything matching these must stay local.
+# Copy `.env.example` to `.env` on a new machine and fill it in.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+next-env.d.ts
+npm-debug.log*
+
+# Generated at runtime: certificates, musters, payroll exports
+biocore/backend/generated/
+
+# Face images. `scripts/prep_faces.py` regenerates them from the bundled
+# InsightFace samples, so there is no reason to carry biometric-shaped data in
+# version control.
+biocore/backend/scripts/testfaces/
+
+# Machine-local data and logs
+*.log
+pgdata/
+biocore_pgdata/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.bak
+*.orig
+
+# Claude Code local settings (may contain machine paths)
+.claude/settings.local.json

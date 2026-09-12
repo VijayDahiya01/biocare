@@ -1,0 +1,15 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I"]
+# E402: we deliberately import the router after app+handlers in main.py;
+# E501: long lines are fine at 120 already, keep relaxed for SQL strings.
+ignore = ["E402", "E501"]
+
+[lint.per-file-ignores]
+# package __init__ files re-export names; migrations are generated-ish.
+"app/models/__init__.py" = ["F401"]
+"app/adapters/**/__init__.py" = ["F401"]
+"migrations/**" = ["F401", "E711"]
+"tests/**" = ["F401", "E711"]

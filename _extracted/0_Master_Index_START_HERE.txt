@@ -1,0 +1,85 @@
+﻿
+Document 0 of 6
+Master Index
+Start Here — Build Documentation Package
+The map to all documents — read this first
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Overview
+The Documentation Package
+
+1. What this package is
+This is the complete, self-contained build documentation for the BioCore face authentication platform. It is written so that a freelance development company can build the entire product without needing to come back with questions. It is split into seven documents (this index plus six references) so each can be handed to the right specialist.
+Read in this order
+1. This Master Index — understand the package and the product at a glance.
+2. System & Operations Documentation — what the product is and how it behaves.
+3. API Reference — the contract between frontend and backend.
+4. Database Schema — the data foundation.
+5. Screen Specifications — the frontend build guide.
+6. Integration & Infrastructure — ZepIris, deployment, security.
+7. Build Plan & Acceptance — sequencing and definition of done.
+
+2. The seven documents
+#
+Document
+For whom
+Answers
+—
+System & Operations Documentation
+Everyone
+What is it? How does it work? Verticals, onboarding, zones, badges.
+1
+API Reference
+Backend + frontend devs
+Every endpoint, request, response, error.
+2
+Database Schema
+Backend devs
+Every table, column, key, index; all four stores.
+3
+Screen Specifications
+Frontend devs + designer
+Every screen, component, state, API call.
+4
+Integration & Infrastructure
+Backend + DevOps
+ZepIris, Docker, deployment, security.
+5
+Build Plan & Acceptance
+PM + client
+Phasing, milestones, definition of done.
+
+3. The product in 60 seconds
+For anyone picking up this package cold, here is the whole product in one page.
+What it is: a web-based face authentication and attendance platform built on the open-source ZepIris engine. No mobile app.
+Core flow: people enroll their face once, then check in/out by looking at a shared kiosk camera. Admins watch and configure from a web dashboard.
+Three actors: the person (enrolls + checks in), the kiosk (a shared terminal), the admin (monitors + configures).
+12 user types, from super admin down to visitor and the kiosk device itself.
+Multi-tenant: one platform serves many isolated client organisations.
+14 verticals: office, school, hotel, factory, hospital, gym, events, and more — same backend, different config.
+Stack: FastAPI backend, Next.js frontend, PostgreSQL + Milvus + MinIO + Redis, Docker.
+Compliance: DPDP Act 2026 enforced in the system itself — consent, audit, erasure, localisation.
+Deployment: on-premise, India-region cloud, or hybrid.
+
+4. The non-negotiables
+Whatever else changes during the build, these must hold. They appear throughout the package and are repeated here so they are never missed.
+Hard rules
+Tenant isolation: no query may ever cross tenant boundaries. Enforced in DB and app.
+Consent first: no face is captured before consent is recorded.
+Data localisation: all data stays in India.
+Erasure is complete: deletion cascades across all four stores and is verified.
+Audit everything: every face search, enroll, and delete is logged immutably.
+Web security: TLS 1.3, HttpOnly SameSite cookies, CSRF, 2FA for admins.
+
+5. What is out of scope
+Be clear with the freelancer about what NOT to build. These require regulatory approval or specialist partners and are not part of this package:
+Bank KYC / RBI-certified identity (needs RBI licence + UIDAI).
+Airport passenger boarding (needs BCAS/DGCA approval).
+Military classified access (needs MoD certification).
+Prison real-time continuous tracking (specialist build).
+The platform can still serve staff attendance in all these settings — just not the regulated, citizen-facing identity functions.
+
+Begin with the System & Operations Documentation
+BioCore Platform — Build Documentation Package — v1.0
+

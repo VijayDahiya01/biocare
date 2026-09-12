@@ -1,0 +1,671 @@
+﻿
+Document 2 of 6
+Database Schema
+Complete PostgreSQL Schema & Data Stores
+Every table, column, type, key, and index — build-ready
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Part 1
+Schema Overview
+
+1. Overview
+The platform uses four data stores. This document specifies all of them, with the PostgreSQL relational schema in full detail since that is where the freelancer will spend most effort.
+Store
+Purpose
+What this doc specifies
+PostgreSQL
+All structured/relational data
+Full table-by-table schema (Part 2–4)
+Milvus
+Face vectors for search
+Collection schema (Part 5)
+MinIO
+Images & files
+Bucket layout (Part 5)
+Redis
+Sessions & cache
+Key patterns (Part 5)
+
+1.1 Conventions
+Primary keys are UUIDs (type uuid, default gen_random_uuid()).
+Every tenant-owned table has a tenant_id column with a foreign key to tenants and an index. This enforces isolation.
+Timestamps are timestamptz (with timezone), default now().
+Soft deletes use a deleted_at column where history must be kept; hard deletes are used for biometric erasure.
+Enums are implemented as Postgres enum types or text with a CHECK constraint.
+
+The golden isolation rule
+EVERY query against a tenant-owned table MUST include WHERE tenant_id = <session tenant>.
+Enforce this with PostgreSQL Row-Level Security (RLS) policies as a safety net — do not rely on application code alone.
+A single missed filter is a cross-tenant data leak and a DPDP breach.
+
+Part 2
+Core Tables
+
+2. Core tables
+tenants
+One row per client organisation. The root of all isolation.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+name
+text
+NOT NULL
+org_code
+text
+UNIQUE, NOT NULL — e.g. ACME-2026
+vertical
+text
+school | hotel | factory | ... (preset)
+plan
+text
+starter | business | enterprise
+status
+text
+active | suspended
+branding
+jsonb
+logo URL, colours, display name
+dpdp_config
+jsonb
+fiduciary name, DPO email, retention days
+created_at
+timestamptz
+default now()
+
+users
+Every human identity — admins, staff, members, admin-enrolled people, guardians, visitors.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED, NOT NULL
+user_type
+text
+see 12 types; e.g. self_user, admin_enrolled, guardian, visitor
+role
+text
+FK → roles.key (permission preset or custom)
+first_name
+text
+NOT NULL
+last_name
+text
+
+email
+text
+UNIQUE per tenant (nullable for admin-enrolled)
+member_id
+text
+client's own ID, e.g. EMP-4821
+department
+text
+nullable
+status
+text
+pending_email | pending_face | active | suspended
+enrolled_by
+text
+self | <admin user_id>
+expiry_date
+date
+nullable — for visitors/temp
+extra
+jsonb
+type-specific fields (ward, case_no, etc.)
+created_at
+timestamptz
+default now()
+deleted_at
+timestamptz
+nullable (soft delete for non-biometric)
+
+roles
+Permission presets and custom roles. Ships with 12 presets; admins add custom rows.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants (null = global preset)
+key
+text
+e.g. entity_admin, manager, custom_night_sup
+name
+text
+display name
+is_preset
+boolean
+true for the 12 built-ins
+permissions
+jsonb
+array of permission strings
+scope
+jsonb
+dept/zone/time restrictions
+
+
+Part 3
+Face, Attendance & Access Tables
+
+3. Face, attendance & access
+face_records
+Links a user to their stored vector (in Milvus) and image (in MinIO). The Postgres row holds only references — never the biometric itself.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+user_id
+uuid
+FK → users, INDEXED
+milvus_vector_id
+text
+ID of the vector in Milvus
+minio_object_key
+text
+key of the image, or null if deleted
+is_active
+boolean
+default true
+enrolled_at
+timestamptz
+default now()
+enrolled_by
+text
+self | admin user_id
+
+attendance_logs
+Every check-in, check-out, and break event. The core operational table; will be the largest.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+user_id
+uuid
+FK → users, INDEXED
+event_type
+text
+check_in | check_out | break_start | break_end
+match_score
+float
+0–1 ZepIris score
+device_id
+uuid
+FK → devices
+zone_id
+uuid
+FK → zones, nullable
+session_id
+uuid
+FK → sessions (class period), nullable
+latitude
+float
+nullable — GPS check-in
+longitude
+float
+nullable
+request_id
+text
+trace + audit link
+created_at
+timestamptz
+default now(), INDEXED
+
+Indexing attendance_logs
+Composite index on (tenant_id, user_id, created_at) — powers per-user history.
+Composite index on (tenant_id, created_at) — powers the dashboard date filters.
+Consider partitioning by month at scale (millions of rows).
+
+current_presence
+A live, small table of who is currently inside. Updated on every in/out. Powers emergency headcount.
+Column
+Type
+Constraints / notes
+tenant_id
+uuid
+FK → tenants, INDEXED
+user_id
+uuid
+PK with tenant_id
+entered_at
+timestamptz
+NOT NULL
+zone_id
+uuid
+FK → zones
+device_id
+uuid
+FK → devices
+
+access_events
+Every access-control decision (granted/denied) at a restricted zone.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+user_id
+uuid
+FK → users, nullable (null = unknown face)
+zone_id
+uuid
+FK → zones
+device_id
+uuid
+FK → devices
+granted
+boolean
+NOT NULL
+reason
+text
+e.g. 'badge_ok', 'no_badge', 'outside_hours'
+created_at
+timestamptz
+default now()
+
+
+Part 4
+Config, Module & Compliance Tables
+
+4. Configuration, modules & compliance
+zones
+Named access-controlled areas.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+name
+text
+NOT NULL
+type
+text
+entry_exit | restricted | amenity
+access_rule
+jsonb
+allowed_badges[], time_windows[]
+door_webhook_url
+text
+nullable
+
+badges
+Access levels assigned to people.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+name
+text
+NOT NULL
+zones
+jsonb
+array of zone IDs
+time_rule
+text
+always | window
+expiry
+date
+nullable
+print_badge
+boolean
+default false
+
+devices
+Registered kiosk terminals.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+name
+text
+e.g. KIOSK-GATE-01
+zone_id
+uuid
+FK → zones
+capture_method
+text
+webcam | rtsp
+device_token
+text
+hashed pairing token
+status
+text
+online | offline | disabled
+last_seen
+timestamptz
+heartbeat
+
+consent_records
+DPDP consent. Mandatory before any face capture.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+user_id
+uuid
+FK → users, INDEXED
+purpose
+text
+e.g. attendance
+method
+text
+self | admin_assisted
+acknowledgements
+jsonb
+the four required booleans
+active
+boolean
+default true
+consent_ref
+text
+human-readable ref
+given_at
+timestamptz
+default now()
+revoked_at
+timestamptz
+nullable
+
+audit_logs
+Immutable record of every significant action. Never updated or deleted (except by retention policy).
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK → tenants, INDEXED
+actor_id
+text
+user/admin/device that acted
+action
+text
+e.g. FACE_SEARCH, ERASURE_COMPLETE
+target_id
+text
+what was acted on
+request_id
+text
+trace link
+ip_address
+text
+
+metadata
+jsonb
+action-specific detail
+created_at
+timestamptz
+default now(), INDEXED
+
+
+4.1 Module-specific tables
+These support the 14 modules. Create them as the corresponding module is built.
+wage_config
+Hourly/daily wage rates (factory, construction).
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+user_id
+uuid
+FK → users
+rate_per_hour
+numeric
+NOT NULL
+overtime_multiplier
+numeric
+default 1.5
+effective_from
+date
+NOT NULL
+
+memberships
+Gym/club subscriptions.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+user_id
+uuid
+FK → users
+plan_type
+text
+monthly | quarterly | annual
+start_date
+date
+
+end_date
+date
+expiry check uses this
+amount_paid
+numeric
+
+payment_ref
+text
+
+
+guardians / guardian_links
+School pickup verification.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+guardian_user_id
+uuid
+FK → users
+student_user_id
+uuid
+FK → users
+relationship
+text
+parent | guardian
+
+timetables / sessions
+Per-period class attendance (school).
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+class_id
+text
+
+subject
+text
+
+teacher_user_id
+uuid
+FK → users
+day_of_week
+int
+0–6
+start_time
+time
+
+end_time
+time
+
+
+donations
+Donation tracking (religious).
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+donor_user_id
+uuid
+FK → users
+amount
+numeric
+
+purpose
+text
+
+payment_ref
+text
+
+receipt_url
+text
+80G PDF
+
+blacklist
+Known bad actors, searched in parallel at every kiosk scan.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+milvus_vector_id
+text
+in the blacklist collection
+reason
+text
+
+added_by
+uuid
+FK → users
+
+webhook_configs
+Outbound integration endpoints.
+Column
+Type
+Constraints / notes
+id
+uuid
+PK
+tenant_id
+uuid
+FK, INDEXED
+event
+text
+access.granted, etc.
+url
+text
+NOT NULL
+secret
+text
+HMAC secret
+active
+boolean
+default true
+
+
+Part 5
+Milvus, MinIO & Redis
+
+5. Non-relational stores
+5.1 Milvus (vector database)
+Stores the 512-dimension face vectors. Two collections per tenant keep enrolled faces and blacklist faces separate but both searchable.
+Collection: faces_<tenant_id>
+  Fields:
+    vector_id   VARCHAR  (primary key, matches face_records)
+    embedding   FLOAT_VECTOR[512]
+    user_id     VARCHAR
+  Index: IVF_FLAT or HNSW, metric_type = COSINE
+ 
+Collection: blacklist_<tenant_id>   (same schema)
+ 
+Search: top_k = 5, COSINE similarity, threshold default 0.5
+
+5.2 MinIO (object storage)
+S3-compatible storage for images and generated files. Raw face images are deleted immediately after the vector is generated; only documents and receipts persist.
+Bucket layout (per tenant prefix):
+  <tenant>/faces/<face_id>.jpg        ← deleted after embedding
+  <tenant>/documents/<id>.pdf         ← consent forms, scans
+  <tenant>/receipts/<id>.pdf          ← donation 80G receipts
+  <tenant>/certificates/<ref>.pdf     ← erasure certificates
+ 
+Server-side encryption: enabled (SSE-S3)
+
+5.3 Redis (cache & sessions)
+In-memory store for sessions, rate limiting, and hot lookups. All keys have a TTL.
+session:<session_id>      → user_id, tenant_id, role   (TTL 8h admin / 4h member)
+csrf:<session_id>         → csrf token                 (TTL = session)
+ratelimit:<key>           → counter                    (TTL 60s)
+otp:<email>               → code                       (TTL 10min)
+presence:<tenant>         → cached inside-count         (TTL 30s)
+
+Erasure touches all four stores
+When a user is erased: delete their Milvus vector, their MinIO images, their Postgres face_records + personal data, and flush their Redis sessions.
+Each deletion is verified independently before the erasure is marked complete.
+See the DPDP & Security document for the full cascade.
+
+End of Database Schema
+

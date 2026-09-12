@@ -1,0 +1,318 @@
+﻿
+Document 7 of 7
+ZepIris — Verified
+Confirmed Against the Actual Repository
+Real endpoints, payloads & config — verified June 2026
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Verified
+Read This Before Building the Face Layer
+
+1. Why this document exists
+The earlier documents described how the platform calls ZepIris based on its general design. This document replaces those assumptions with the ACTUAL ZepIris API, verified directly against the source repository (github.com/zepto-labs/zepiris, v1.0.0, verified June 2026). Where this document and an earlier one disagree, THIS document is correct.
+Verified facts
+Repository: github.com/zepto-labs/zepiris — public, MIT licensed.
+Version: v1.0.0 (released May 2026). Stack: Python 3.10–3.14, FastAPI, Poetry.
+Two services: Main API on :8000, ML Inference on :8001.
+Backed by Milvus (vectors), MinIO (images), Etcd (Milvus metadata).
+
+2. Corrections to earlier documents
+These are the specific points the freelancer MUST follow. Each corrects an assumption in the earlier API Reference or Integration documents.
+Topic
+Earlier assumption
+ACTUAL (verified) — use this
+Insert path
+/v1/faces/insert (base64 JSON)
+/v1/faces/insert — multipart form, file upload
+Search path
+/faces/search (JSON body)
+/v1/faces/search?top_k=5 — multipart form
+Request format
+base64 JSON for Main API
+multipart/form-data with a real file (Main API)
+Health check
+/health
+/healthz and /readyz
+Tenant model
+Per-tenant Milvus collections
+ONE collection (zepiris_faces) with a tenant column
+Search + bad image
+422 error
+200 OK with empty matches[]
+Response IDs
+request_id (snake_case)
+requestId (camelCase)
+Milvus index
+IVF_FLAT / HNSW
+FLAT with COSINE metric
+MinIO port
+9000
+host 9002 → container 9000 (console 9001)
+Env prefix
+generic
+ZEPIRIS_* (main) and ML_SERVICE_* (ML)
+Most important correction
+ZepIris is multi-tenant via a 'tenant' FORM FIELD on each call — not via separate collections.
+The platform must pass tenant=<tenant_id> on every insert/search/upsert.
+All faces live in one Milvus collection 'zepiris_faces'; the tenant column isolates them.
+
+Part 3
+Main API — Verified Endpoints
+
+3. Main API (port 8000)
+All face operations the platform calls. These are the real signatures from the repository.
+3.1 Insert a face
+POST
+/v1/faces/insert
+
+Multipart form. Registers a new face. Returns 409 if the id already exists, 422 if image-quality assessment fails or no face is detected.
+curl -X POST http://localhost:8000/v1/faces/insert \
+  -F "id=employee_001" \
+  -F "tenant=acme_corp" \
+  -F "file=@face.jpg"
+ 
+Response 200:
+{
+  "requestId": "a1b2c3d4-...",
+  "imageQualityAssessment": {
+    "passed": true,
+    "nudity": { "is_safe": true,  "probability": 0.02 },
+    "spoof":  { "is_spoof": false, "probability": 0.05 },
+    "blur":   { "is_sharp": true,  "probability": 0.10 }
+  },
+  "userOperationResult": { "operation": "INSERT", "status": "success" }
+}
+
+3.2 Search for a face (check-in)
+POST
+/v1/faces/search
+
+Multipart form. top_k and threshold are query parameters. Returns 200 with an empty matches array if IQA fails or no face is found — it does NOT error on a bad image. The platform's own /faces/search endpoint wraps this and then applies toggle logic to record attendance.
+curl -X POST "http://localhost:8000/v1/faces/search?top_k=5" \
+  -F "id=query_001" \
+  -F "tenant=acme_corp" \
+  -F "file=@query_face.jpg"
+ 
+Response 200:
+{
+  "requestId": "d4e5f6a7-...",
+  "imageQualityAssessment": { "passed": true, ... },
+  "searchResult": { "matches": [ { "id": "employee_001", "score": 0.92 } ] }
+}
+ 
+Query params: top_k (default 5), threshold (default ZEPIRIS_MILVUS_SEARCH_THRESHOLD=0.5)
+
+3.3 Upsert a face
+POST
+/v1/faces/upsert
+
+Multipart form. Insert or update. Same response shape as insert, with operation = UPSERT. Use this for re-enrollment (a person updating their face).
+
+3.4 Delete a face
+DELETE
+/v1/faces/delete
+
+Query parameter id. Part of the platform's erasure cascade — this removes the vector from Milvus.
+curl -X DELETE "http://localhost:8000/v1/faces/delete?id=employee_001"
+ 
+Response 200:
+{ "requestId": "...", "userOperationResult": { "operation": "DELETE", "status": "success" } }
+
+3.5 Get face metadata
+GET
+/v1/faces/get/{face_id}
+
+curl http://localhost:8000/v1/faces/get/employee_001
+ 
+Response 200:
+{ "face_id": "employee_001", "tenant": "acme_corp", "object_key": "faces/employee_001" }
+
+3.6 Health & readiness
+GET
+/healthz
+
+GET
+/readyz
+
+Both return {"status": "ok"}. Use /readyz for orchestration readiness probes, /healthz for liveness.
+
+Part 4
+ML Inference — Verified Endpoints
+
+4. ML Inference (port 8001)
+Internal service. The Main API calls these; the platform normally does not call them directly. Unlike the Main API, these take base64 JSON, not file uploads. Documented here so the freelancer understands the full pipeline and can tune thresholds.
+4.1 Common payload
+All ML POST endpoints take:
+{ "image_b64": "<base64-encoded image bytes>" }
+
+4.2 The five ML endpoints
+
+>>> CORRECTION 2026-08-17 — THE PATHS BELOW ARE WRONG. <<<
+>>> Checked against zepiris/ml_inference/routes.py @ github.com/zepto-labs/zepiris.
+>>> The real routes are namespaced under /v1/iqa/ and /v1/face/. The payload shape in
+>>> 4.1 ({"image_b64": ...}) IS correct; only the paths and the "nudity" naming are not.
+>>>
+>>>   as written here   ->  ACTUAL PATH
+>>>   /v1/embed         ->  POST /v1/face/embed
+>>>   /v1/nudity        ->  POST /v1/iqa/nsfw_check
+>>>   /v1/spoof         ->  POST /v1/iqa/spoof_check
+>>>   /v1/blur          ->  POST /v1/iqa/blur_check
+>>>   /v1/assess        ->  POST /v1/iqa/assess
+>>>
+>>> Also note: the Main API uses the PLURAL /v1/faces/... ; the ML service is singular
+>>> /v1/face/... . Bad input returns 400 with detail invalid_base64 / empty_image_data /
+>>> invalid_image_format / failed_to_decode_image.
+>>> Authoritative reference: biocore/docs/ZEPIRIS_ONPREM.md §7.1
+>>> The response shapes below are retained as originally documented but were NOT
+>>> re-verified field-by-field against the live service.
+
+POST
+/v1/embed                                    [ACTUAL: /v1/face/embed]
+
+Generates the 512-d embedding. Returns face_detected, embedding[], embedding_dim.
+{ "face_detected": true, "embedding": [0.123, -0.456, ...], "embedding_dim": 512 }
+
+POST
+/v1/nudity                                   [ACTUAL: /v1/iqa/nsfw_check]
+
+Content safety. Returns { "is_safe": true, "probability": 0.02 }.
+
+POST
+/v1/spoof                                    [ACTUAL: /v1/iqa/spoof_check]
+
+Liveness. Returns { "is_spoof": false, "probability": 0.05 }.
+
+POST
+/v1/blur                                     [ACTUAL: /v1/iqa/blur_check]
+
+Sharpness. Returns { "is_sharp": true, "probability": 0.10 }.
+
+POST
+/v1/assess                                   [ACTUAL: /v1/iqa/assess]
+
+Combined IQA — runs nudity + spoof + blur in parallel (ThreadPoolExecutor). This is what the Main API uses internally before insert/search.
+Response:
+{
+  "passed": true,
+  "nudity": { "is_safe": true,  "probability": 0.02 },
+  "spoof":  { "is_spoof": false, "probability": 0.05 },
+  "blur":   { "is_sharp": true,  "probability": 0.10 }
+}
+ 
+passed = is_safe AND (NOT is_spoof) AND is_sharp
+
+Model loading note
+Each ML model loads from a .pth file on startup (default /app/models/{nudity,spoof,blur}_model.pth).
+>>> CORRECTION: the filename is nsfw_model.pth, not nudity_model.pth ->
+>>>   /app/models/{nsfw,spoof,blur}_model.pth
+>>> These files are COMMITTED in the upstream repo at models/ and are baked into the
+>>> image by ml_inference.Dockerfile (COPY models/ /app/models/). There is no separate
+>>> release download. Paths are overridable per-model via
+>>> ML_SERVICE_{NSFW,SPOOF,BLUR}_LOCAL_MODEL_PATH.
+If a model file is missing, that endpoint returns 503 Service Unavailable.
+Models can take 30–60 seconds to load on first start — build readiness probes accordingly.
+
+Part 5
+Verified Schema & Config
+
+5. Milvus schema (verified)
+ZepIris uses ONE Milvus collection. This is different from the platform's other per-tenant stores — here, tenant is a column.
+Collection: zepiris_faces
+  face_id      VARCHAR(128)       primary key
+  tenant       VARCHAR(256)       multi-tenancy
+  object_key   VARCHAR(512)       MinIO image path
+  embedding    FLOAT_VECTOR(512)  face vector
+ 
+Index: FLAT, metric COSINE
+
+6. Verified environment variables
+6.1 Main API (ZEPIRIS_*)
+Variable
+Default
+Note
+ZEPIRIS_API_PORT
+8000
+Main API port
+ZEPIRIS_MINIO_ENDPOINT
+localhost:9002
+MinIO host:port
+ZEPIRIS_MINIO_BUCKET
+zepiris
+Image bucket
+ZEPIRIS_MILVUS_HOST
+localhost
+Milvus host
+ZEPIRIS_MILVUS_PORT
+19530
+Milvus port
+ZEPIRIS_MILVUS_COLLECTION
+zepiris_faces
+Collection name
+ZEPIRIS_MILVUS_SEARCH_THRESHOLD
+0.5
+Default match threshold
+ZEPIRIS_ML_INFERENCE_SERVICE_URL
+(required)
+Main API won't start without it
+
+6.2 ML service (ML_SERVICE_*)
+Variable
+Default
+Note
+ML_SERVICE_PORT
+8001
+ML service port
+ML_SERVICE_ML_DEVICE
+cpu
+cpu | cuda:0 | mps
+ML_SERVICE_SPOOF_THRESHOLD
+0.5
+Liveness sensitivity
+ML_SERVICE_BLUR_THRESHOLD
+0.5
+Sharpness sensitivity
+ML_SERVICE_NUDITY_THRESHOLD
+0.5
+Content-safety sensitivity
+>>> CORRECTION: the real variable is ML_SERVICE_NSFW_THRESHOLD (not _NUDITY_).
+ML_SERVICE_FACE_AREA_THRESHOLD
+0.01
+Min face area (fraction)
+
+>>> ADDITIONS 2026-08-17 — verified from upstream .env.example, missing from this doc:
+>>> ML_SERVICE_HOST                 0.0.0.0   bind address
+>>> ML_SERVICE_FACE_MODEL           auraface  auraface | buffalo_l
+>>>     *** LICENSING: buffalo_l weights are licensed for NON-COMMERCIAL RESEARCH ONLY.
+>>>     *** Commercial use needs a separate licence (recognition-oss-pack@insightface.ai).
+>>>     *** auraface (fal/AuraFace-v1) is Apache-2.0. KEEP THE DEFAULT.
+>>> ML_SERVICE_FACE_EMBEDDING_DIM   512
+>>> ML_SERVICE_FACE_DETECTION_WIDTH  640
+>>> ML_SERVICE_FACE_DETECTION_HEIGHT 640
+>>> ML_SERVICE_{NSFW,SPOOF,BLUR}_MODEL_SOURCE       local | huggingface | auto
+>>> ML_SERVICE_{NSFW,SPOOF,BLUR}_LOCAL_MODEL_PATH   /app/models/<name>_model.pth
+>>> ML_SERVICE_{NSFW,SPOOF,BLUR}_HF_REPO_ID         (empty when source=local)
+>>> ML_SERVICE_{NSFW,SPOOF,BLUR}_HF_MODEL_FILE      <name>_model.pth
+>>> Main API additions: ZEPIRIS_API_HOST, ZEPIRIS_MINIO_ACCESS_KEY,
+>>> ZEPIRIS_MINIO_SECRET_KEY, ZEPIRIS_MINIO_SECURE, ZEPIRIS_MILVUS_EMBEDDING_DIM.
+>>> The two MINIO credential vars are REQUIRED — ZepIris cannot reach MinIO without them.
+
+7. How the platform wraps ZepIris
+To keep the platform's own clean API (documented in Document 2) while using the real ZepIris underneath, build a thin adapter in the face-auth service:
+Platform receives a base64 image from the browser (its own API stays base64-friendly for the web).
+The adapter decodes the base64 to bytes and posts them as a multipart file to ZepIris, adding the tenant form field from the session.
+It maps ZepIris's response (requestId, imageQualityAssessment, searchResult.matches) into the platform's own envelope (success, data, request_id).
+On search, it reads matches[0] and applies toggle logic to record the attendance event.
+On erasure, it calls DELETE /v1/faces/delete plus removes the MinIO object and Postgres records.
+
+This adapter is the single most important integration component
+Isolating ZepIris behind one adapter means: if ZepIris changes, only the adapter changes.
+It also lets the platform present a consistent, web-friendly, base64 API to the frontend while ZepIris uses multipart underneath.
+Specify and test this adapter first — everything else depends on it.
+
+End of ZepIris Verified Integration
+

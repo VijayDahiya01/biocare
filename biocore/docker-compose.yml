@@ -1,0 +1,253 @@
+# BioCore — full stack, one command up.
+#   docker compose up --build
+#
+# Phase 0 acceptance: every container below comes up healthy, the api can reach
+# postgres/redis/milvus/minio, and the zepiris adapter can enroll+search a test face.
+#
+# All config comes from .env (copy .env.example -> .env first). Nothing is hardcoded.
+
+services:
+  gateway:
+    image: nginx:1.27
+    depends_on: [api, frontend]
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      - NEXT_PUBLIC_API_BASE=/api/v1
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      milvus: { condition: service_started }
+      minio: { condition: service_healthy }
+      zepiris-main: { condition: service_started }
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/api/v1/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  # Async event-bus worker: webhook delivery (retry/DLQ) + notification sending.
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    depends_on:
+      rabbitmq: { condition: service_started }
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Built from source, NOT pulled: the ghcr.io/zepto-labs/* packages are private
+  # (anonymous pull -> HTTP 403). Build both tags first, per docs/ZEPIRIS_ONPREM.md §6.1:
+  #   git clone https://github.com/zepto-labs/zepiris.git && cd zepiris
+  #   cp .env.example .env        # the Dockerfile COPYs .env; build fails without it
+  #   docker build -f Dockerfile              -t zepiris-main:1.0.0 .
+  #   docker build -f ml_inference.Dockerfile -t zepiris-ml:1.0.0   .
+  zepiris-main:
+    image: zepiris-main:1.0.0
+    environment:
+      - ZEPIRIS_API_HOST=0.0.0.0
+      - ZEPIRIS_API_PORT=8000
+      - ZEPIRIS_MINIO_ENDPOINT=minio:9000
+      # Required — ZepIris cannot authenticate to MinIO without these.
+      - ZEPIRIS_MINIO_ACCESS_KEY=${MINIO_KEY}
+      - ZEPIRIS_MINIO_SECRET_KEY=${MINIO_SECRET}
+      - ZEPIRIS_MINIO_BUCKET=zepiris
+      - ZEPIRIS_MINIO_SECURE=false
+      - ZEPIRIS_MILVUS_HOST=milvus
+      - ZEPIRIS_MILVUS_PORT=19530
+      - ZEPIRIS_MILVUS_COLLECTION=zepiris_faces
+      - ZEPIRIS_MILVUS_EMBEDDING_DIM=512
+      - ZEPIRIS_MILVUS_SEARCH_THRESHOLD=0.5
+      - ZEPIRIS_ML_INFERENCE_SERVICE_URL=http://zepiris-ml:8001
+    depends_on:
+      milvus: { condition: service_started }
+      minio: { condition: service_healthy }
+      zepiris-ml: { condition: service_started }
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  zepiris-ml:
+    image: zepiris-ml:1.0.0
+    environment:
+      - ML_SERVICE_HOST=0.0.0.0
+      - ML_SERVICE_PORT=8001
+      # CPU-only by design — the upstream build hard-codes CPUExecutionProvider and
+      # pins torch to the CPU wheel index. cuda:0 crashes. No GPU, no VRAM needed.
+      - ML_SERVICE_ML_DEVICE=cpu
+      # KEEP auraface (Apache-2.0). buffalo_l weights are licensed for NON-COMMERCIAL
+      # research only and must not be used in a customer-facing deployment.
+      - ML_SERVICE_FACE_MODEL=auraface
+      - ML_SERVICE_FACE_EMBEDDING_DIM=512
+      - ML_SERVICE_FACE_AREA_THRESHOLD=0.01
+      - ML_SERVICE_SPOOF_THRESHOLD=0.5
+      - ML_SERVICE_BLUR_THRESHOLD=0.5
+      - ML_SERVICE_NSFW_THRESHOLD=0.5
+      # AuraFace weights are baked in at build time; forbid the one runtime egress.
+      - HF_HUB_OFFLINE=1
+    # NO models volume here. The image already does `COPY models/ /app/models/`, and
+    # mounting ./infra/models over it would MASK the baked-in weights -> every ML
+    # endpoint 503s and /readyz never passes. See docs/ZEPIRIS_ONPREM.md §8.3.
+    expose:
+      - "8001"
+    # Models take 30-60s to load; give a generous start period.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8001/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    restart: unless-stopped
+
+  # PPE / safety-gear model server (Phase 4, optional).
+  # Enable with:  docker compose --profile ppe up
+  # Then set PPE_SERVICE_URL=http://ppe-ml:8002 in .env.
+  # Ships a REFERENCE server (configurable, not a trained model) implementing the
+  # POST /detect contract; swap the build/image for your real inference service.
+  ppe-ml:
+    build: ./infra/ppe-reference
+    profiles: ["ppe"]
+    environment:
+      - PPE_PORT=8002
+    expose:
+      - "8002"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    env_file: .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # --- Milvus standalone + its deps (etcd, minio shared) ---
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - etcddata:/etcd
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    command: server /data --console-address ":9001"
+    env_file: .env
+    environment:
+      - MINIO_ROOT_USER=${MINIO_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET}
+    ports:
+      - "9002:9000"   # host 9002 -> container 9000 (per verified ZepIris note)
+      - "9001:9001"   # console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  milvus:
+    image: milvusdb/milvus:v2.4.4
+    command: ["milvus", "run", "standalone"]
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - MINIO_ADDRESS=minio:9000
+      - MINIO_ACCESS_KEY_ID=${MINIO_KEY}
+      - MINIO_SECRET_ACCESS_KEY=${MINIO_SECRET}
+    depends_on: [etcd, minio]
+    expose:
+      - "19530"
+    volumes:
+      - milvusdata:/var/lib/milvus
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    expose:
+      - "9090"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    depends_on: [prometheus]
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    env_file: .env
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    expose:
+      - "5672"
+    ports:
+      - "15672:15672"   # management UI
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  etcddata:
+  miniodata:
+  milvusdata:
+  promdata:
+  grafanadata:

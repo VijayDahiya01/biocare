@@ -1,0 +1,191 @@
+﻿
+Document 4 of 6
+Integration & Infrastructure
+ZepIris, Deployment, DevOps & Security
+How to wire up the ML engine and run the whole stack
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Part 1
+ZepIris Integration
+
+1. ZepIris integration
+ZepIris is the open-source face authentication engine at the core. It runs as two services (a main API and an ML inference service) and the platform's own face-auth service calls it. This section explains how to deploy and call it.
+1.1 What ZepIris provides
+Capability
+Model
+Used for
+Face embedding
+InsightFace buffalo_l
+Turning a face into a 512-number vector
+Vector search
+Milvus (COSINE)
+1-to-N identity matching
+Spoof detection
+MobileNetV3
+Liveness — reject photos/screens
+Blur detection
+ResNet18
+Image quality gate
+Nudity detection
+MobileNetV2
+Content safety
+
+1.2 Service ports
+ZepIris Main API        :8000   ← platform calls this
+ZepIris ML Inference    :8001   ← internal, called by 8000
+Milvus                  :19530
+MinIO                   :9000
+ 
+The platform's face-auth service calls ZepIris :8000 over the internal network.
+
+1.3 Enroll & search calls
+The platform wraps these ZepIris calls inside its own /faces/enroll and /faces/search endpoints (see API Reference). The raw ZepIris calls are:
+Enroll:
+POST :8000/v1/faces/insert
+{ "collection": "faces_<tenant>", "id": "<face_id>", "image": "<base64>" }
+ 
+Search:
+POST :8000/v1/faces/search
+{ "collection": "faces_<tenant>", "image": "<base64>", "top_k": 5 }
+Returns: [{ id, score }, ...] sorted by score desc
+
+Threshold tuning
+Default match threshold is 0.5. Above it = match.
+For attendance, 0.5 is a good balance. For high-security zones, raise to 0.65–0.7.
+Lower thresholds = more false accepts; higher = more false rejects. Make it per-zone configurable.
+Always run blur + spoof checks BEFORE accepting a match.
+
+1.4 Per-tenant collections
+Each tenant gets its own Milvus collections (faces_<tenant> and blacklist_<tenant>). This guarantees a search never crosses tenant boundaries — the isolation rule extends into the vector database.
+
+Part 2
+Deployment
+
+2. Deployment
+The platform ships as Docker containers orchestrated by Docker Compose (small/on-prem) or Kubernetes (cloud/scale). The same images run in both.
+2.1 The container set
+Container
+Image
+Role
+gateway
+nginx
+Reverse proxy, SSL, routing
+frontend
+node (Next.js)
+The web app
+api
+python (FastAPI)
+All microservices (or split)
+zepiris-main
+zepiris
+Face API
+zepiris-ml
+zepiris-ml
+ML inference
+postgres
+postgres:16
+Relational DB
+milvus
+milvusdb/milvus
+Vector DB
+minio
+minio/minio
+Object storage
+redis
+redis:7
+Cache + sessions
+rabbitmq
+rabbitmq:3
+Async event bus
+
+2.2 Three deployment modes
+Mode
+Where it runs
+When to use
+On-premise
+Client's own server
+Data must never leave site (default for privacy)
+Cloud (SaaS)
+India-region cloud
+Client wants managed hosting
+Hybrid
+Core on-prem, analytics cloud
+Large clients with both needs
+
+Data localisation — non-negotiable
+All personal and biometric data must stay within India (DPDP).
+Cloud deployments use an India region only (e.g. Mumbai).
+On-premise deployments keep everything on the client's own hardware — nothing leaves.
+
+2.3 Minimum hardware
+Deployment size
+RAM
+CPU / GPU
+Disk
+Small (1 site, <200 users)
+8 GB
+4-core CPU
+50 GB
+Medium (multi-site, <2000)
+16 GB
+8-core CPU, optional GPU
+200 GB
+Large (enterprise)
+32 GB+
+GPU recommended for ML
+500 GB+
+
+2.4 Environment configuration
+All config is via environment variables — never hardcoded. Key variables:
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+MILVUS_HOST=milvus  MILVUS_PORT=19530
+MINIO_ENDPOINT=minio:9000  MINIO_KEY=...  MINIO_SECRET=...
+ZEPIRIS_URL=http://zepiris-main:8000
+MATCH_THRESHOLD=0.5
+SESSION_SECRET=...   CSRF_SECRET=...
+SMTP_URL=...   SMS_PROVIDER_KEY=...
+DATA_REGION=india
+
+Part 3
+Security & DevOps
+
+3. Security & DevOps
+3.1 Security requirements (mandatory)
+Transport: TLS 1.3 on all traffic. No plain HTTP, ever.
+At rest: AES-256 encryption for the database and MinIO. Milvus vectors encrypted at rest.
+Sessions: HttpOnly, Secure, SameSite=Strict cookies. CSRF tokens on all mutations.
+Passwords: Argon2 or bcrypt hashing. TOTP 2FA mandatory for admin roles.
+Tenant isolation: PostgreSQL Row-Level Security as a safety net beyond app-layer checks.
+Secrets: in a secrets manager or env, never in code or git.
+Rate limiting: at the gateway, per the API Reference limits.
+
+3.2 Monitoring
+Tool
+Watches
+Prometheus
+Metrics — request rate, latency, error rate, uptime
+Grafana
+Dashboards and alerting thresholds
+Audit logs
+Every significant action (in PostgreSQL)
+Health checks
+Each container exposes /health; gateway probes it
+
+3.3 Backups
+PostgreSQL: daily automated dump, retained 30 days; point-in-time recovery enabled.
+Milvus & MinIO: daily snapshot.
+Restore drills: test a full restore monthly. A backup you haven't restored is not a backup.
+
+3.4 CI/CD
+Pipeline: on push → lint → test → build images → deploy to staging → manual approval → production.
+Migrations: database migrations run automatically and must be reversible.
+Zero-downtime: rolling deploys; the face-search path must never be fully down.
+
+End of Integration & Infrastructure
+

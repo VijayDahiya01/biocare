@@ -1,0 +1,508 @@
+﻿
+Document 1B of 7
+API Reference — Part 2
+Complete Endpoint Coverage (Continued)
+Every remaining endpoint — 100% coverage with Part 1
+BioCore Platform — Build Documentation Package
+Stack: FastAPI · Next.js · PostgreSQL · Milvus · MinIO · Redis
+
+Contents
+TOC \h \o "1-2"
+
+
+Continues
+From the API Reference (Document 1)
+
+7. About this part
+Document 1 (API Reference) specified the conventions and the most critical endpoints in full. This part completes the coverage — every remaining endpoint across all 14 modules, so the freelancer never has to invent an endpoint. All conventions from Document 1 (auth, envelope, status codes, tenant scoping, pagination) apply here unchanged.
+Coverage map
+Document 1 covered: auth, enrollment/face, attendance core, and the main resources.
+This document covers: leave, HR/payroll, roles, reports (full), notifications, settings, and every module endpoint (wage, membership, guardian, timetable, donation, events, GPS, emergency, ERP).
+Together they are the complete API surface.
+
+Part 8
+Leave Management
+
+8. Leave management
+GET
+/leave
+
+List leave requests for the tenant (admin) or for self (member). Filter by ?status=pending|approved|rejected and ?user_id.
+
+POST
+/leave
+
+Submit a leave request.
+Body:
+{
+  "type": "casual",          // casual | sick | earned | unpaid
+  "from": "2026-06-20", "to": "2026-06-22",
+  "reason": "Family function"
+}
+Response 201: { success, data: { leave_id, status: "pending" } }
+
+POST
+/leave/{id}/approve
+
+Manager/admin approves a request. Logged in audit. Body: { "note": "..." }.
+
+POST
+/leave/{id}/reject
+
+Manager/admin rejects a request. Body: { "reason": "..." }.
+
+GET
+/leave/balance/{user_id}
+
+Returns the leave balance by type for a user.
+Response: { data: { casual: 8, sick: 6, earned: 12, used: { casual: 2 } } }
+
+
+Part 9
+HR, Payroll & Wages
+
+9. HR, payroll & wages
+GET
+/wage-config/{user_id}
+
+Get a worker's wage configuration.
+
+POST
+/wage-config
+
+Set or update a worker's wage rate (factory/construction).
+Body:
+{
+  "user_id": "usr_92", "rate_per_hour": 120,
+  "overtime_multiplier": 1.5, "effective_from": "2026-06-01"
+}
+
+GET
+/payroll/calculate
+
+Calculate payroll for a period from attendance + wage config. Query: ?from&to&user_id (optional).
+Response: { data: { items: [
+  { user_id, name, hours: 184, overtime_hours: 12,
+    base_pay: 22080, overtime_pay: 2160, total: 24240 } ] } }
+
+GET
+/payroll/export
+
+Export payroll as Excel/CSV for the payroll team. Query: ?from&to&format=excel|csv.
+
+GET
+/hr/summary
+
+HR dashboard summary: headcount, present today, on-leave, late count.
+
+
+Part 10
+Roles & Permissions
+
+10. Roles & permissions
+GET
+/roles
+
+List all roles for the tenant — the 12 presets plus any custom roles.
+
+POST
+/roles
+
+Create a custom role with a chosen permission set and scope.
+Body:
+{
+  "name": "Night Shift Supervisor",
+  "permissions": ["attendance.view","alerts.view"],
+  "scope": { "zones": ["floor_a"], "time": {"from":"20:00","to":"06:00"} }
+}
+
+PATCH
+/roles/{id}
+
+Update a custom role's permissions or scope. Presets cannot be edited (403).
+
+DELETE
+/roles/{id}
+
+Delete a custom role. Fails (409) if users are still assigned to it.
+
+GET
+/permissions
+
+List all assignable permission strings, grouped by area. Used to build the role editor UI.
+Response: { data: { attendance: ["attendance.view","attendance.edit"],
+  users: ["users.view","users.create","users.delete"], ... } }
+
+
+Part 11
+Reports & Analytics
+
+11. Reports & analytics (full)
+GET
+/reports/attendance
+
+Attendance report with grouping. Query: ?from&to&group_by=day|user|department.
+
+GET
+/reports/late
+
+Late-arrival report for a period.
+
+GET
+/reports/absent
+
+Absentee report — who had no check-in on given days.
+
+GET
+/reports/zone-access
+
+Zone access logs — who entered which restricted zone and when.
+
+GET
+/reports/footfall
+
+Footfall counts per device/zone over time (events, retail, religious).
+
+GET
+/reports/movement
+
+Zone-to-zone movement log (high-security). Query: ?user_id&from&to.
+
+GET
+/reports/export
+
+Export any report. Query: ?report=attendance|late|...&format=pdf|excel|csv plus that report's filters.
+
+POST
+/reports/schedule
+
+Schedule a recurring report by email.
+Body:
+{
+  "report": "attendance", "frequency": "daily",
+  "format": "pdf", "recipients": ["hr@acme.com"]
+}
+
+
+Part 12
+Notifications & Alerts
+
+12. Notifications & alerts
+GET
+/alerts
+
+List active alerts for the tenant. Filter by ?priority=critical|high|medium and ?type.
+
+POST
+/alerts/{id}/dismiss
+
+Dismiss an alert. Logged with the dismissing admin.
+
+GET
+/alerts/settings
+
+Get alert routing settings (which channels, which thresholds).
+
+PATCH
+/alerts/settings
+
+Update alert settings.
+Body:
+{
+  "late_threshold": "09:00",
+  "channels": { "email": true, "sms": "critical_only", "browser": true },
+  "whatsapp_enabled": false
+}
+
+POST
+/notifications/test
+
+Send a test notification to verify a channel works (admin only).
+
+
+Part 13
+Settings, Tenant & Branding
+
+13. Settings & tenant
+GET
+/settings
+
+Get all tenant settings — branding, DPDP config, thresholds, modules enabled.
+
+PATCH
+/settings
+
+Update tenant settings.
+Body (any subset):
+{
+  "branding": { "logo_url": "...", "primary_color": "#1F3A5F", "display_name": "Acme" },
+  "dpdp": { "fiduciary": "Acme Corp", "dpo_email": "privacy@acme.com",
+            "retention_days": 1095 },
+  "match_threshold": 0.5,
+  "modules_enabled": ["wage","timetable","guardian"]
+}
+
+GET
+/settings/webhooks
+
+List configured outbound webhooks (see Document 1, Part 6.3).
+
+POST
+/settings/webhooks
+
+Add a webhook. Body: { event, url, secret }.
+
+DELETE
+/settings/webhooks/{id}
+
+Remove a webhook.
+
+13.1 Super-admin (platform) endpoints
+Available only to the platform owner, not to client admins.
+GET
+/admin/tenants
+
+List all tenants on the platform.
+
+POST
+/admin/tenants
+
+Provision a new tenant (the start of onboarding).
+Body:
+{
+  "name": "Acme Public School", "org_code": "ACME-2026",
+  "vertical": "school", "plan": "business",
+  "admin_email": "principal@acme.com"
+}
+
+POST
+/admin/tenants/{id}/suspend
+
+Suspend a tenant (e.g. non-payment).
+
+GET
+/admin/metrics
+
+Platform-wide health and usage metrics.
+
+
+Part 14
+Module Endpoints
+
+14. Module-specific endpoints
+These power the 14 modules. Build each as its module is implemented (see the Build Plan).
+14.1 Membership (gym/club)
+GET
+/memberships/{user_id}
+
+Get a member's current plan and expiry.
+
+POST
+/memberships
+
+Create or renew a membership.
+Body: { "user_id": "...", "plan_type": "annual",
+        "start_date": "2026-06-15", "amount_paid": 12000, "payment_ref": "rzp_..." }
+
+GET
+/memberships/expiring
+
+List memberships expiring soon (for renewal reminders). Query: ?days=7.
+
+14.2 Guardian (school)
+POST
+/guardians/invite
+
+Send a guardian an enrollment link, pre-linked to a student.
+Body: { "student_user_id": "...", "guardian_name": "...", "guardian_email": "...", "relationship": "parent" }
+
+GET
+/guardians/{student_id}
+
+List authorised guardians for a student.
+
+POST
+/pickup/verify
+
+Kiosk verifies a guardian face at pickup and confirms the student link.
+Body: { "device_id": "...", "image": "...", "student_id": "..." }
+Response: { data: { authorised: true, guardian_name: "..." } }
+
+14.3 Timetable (school)
+GET
+/timetable
+
+Get the class timetable. Query: ?class_id&day.
+
+POST
+/timetable
+
+Create a timetable entry (class, subject, teacher, time slot).
+
+GET
+/attendance/session
+
+Per-period attendance for a session. Query: ?session_id.
+
+14.4 Donations (religious)
+POST
+/donations
+
+Record a donation linked to a verified donor; generates an 80G receipt.
+Body: { "donor_user_id": "...", "amount": 5000, "purpose": "general", "payment_ref": "..." }
+Response: { data: { donation_id, receipt_url: "/receipts/....pdf" } }
+
+GET
+/donations/{donor_id}
+
+A donor's donation history (also visible in their self-service portal).
+
+
+14.5 Events
+POST
+/events/import
+
+Bulk-import a delegate list (CSV/Excel) and create pending accounts.
+Multipart form: file=@delegates.csv, plus event_id
+
+POST
+/events/badge-print
+
+Trigger a badge print on check-in via the configured printer webhook.
+
+GET
+/events/{event_id}/footfall
+
+Real-time footfall for an event, by zone.
+
+14.6 GPS field check-in
+POST
+/attendance/gps
+
+Field-worker check-in with face + GPS coordinates from the browser.
+Body: { "image": "...", "latitude": 28.70, "longitude": 77.13 }
+Response: { data: { match: true, within_geofence: true, event: "check_in" } }
+
+GET
+/geofences
+
+List configured geofences (allowed check-in areas).
+
+POST
+/geofences
+
+Create a geofence. Body: { name, center_lat, center_lng, radius_km }.
+
+14.7 Emergency headcount
+POST
+/emergency/trigger
+
+Activate emergency mode — snapshots who is inside and bulk-notifies them.
+Response: { data: { inside_count: 31, muster_report_url: "/reports/....pdf" } }
+
+GET
+/emergency/status
+
+Live status during an active emergency — who is still inside.
+
+14.8 ERP / HR connectors
+POST
+/integrations/erp/sync
+
+Push attendance to a connected ERP (SAP/Zoho/Darwinbox/Keka). Configured under settings.
+
+GET
+/integrations
+
+List configured third-party integrations and their status.
+
+
+Part 15
+Complete Endpoint Index
+
+15. Complete endpoint index
+Every endpoint in the platform, across Documents 1 and 1B, for quick reference. The freelancer can use this as a build checklist.
+Area
+Endpoints
+Doc
+Auth
+csrf, login, otp/request, otp/verify, logout
+1
+Enrollment/face
+register, consent, faces/enroll, faces/search, admin/enroll
+1
+Attendance
+attendance, attendance/manual, attendance/break, attendance/presence
+1
+Users
+users (CRUD)
+1
+Zones
+zones (CRUD)
+1
+Badges
+badges (CRUD)
+1
+Devices
+devices (CRUD), devices/disable
+1
+Visitors
+visitors/invite, visitors/enroll
+1
+Blacklist
+blacklist (CRUD)
+1
+DPDP
+me/data/export, me/data/erasure, me/consent/revoke
+1
+Webhooks
+settings/webhooks (CRUD)
+1 + 1B
+Leave
+leave, approve, reject, balance
+1B
+HR/payroll
+wage-config, payroll/calculate, payroll/export, hr/summary
+1B
+Roles
+roles (CRUD), permissions
+1B
+Reports
+attendance, late, absent, zone-access, footfall, movement, export, schedule
+1B
+Alerts
+alerts, dismiss, settings, notifications/test
+1B
+Settings
+settings, webhooks, super-admin tenants
+1B
+Membership
+memberships (CRUD), expiring
+1B
+Guardian
+guardians/invite, pickup/verify
+1B
+Timetable
+timetable, attendance/session
+1B
+Donations
+donations (CRUD)
+1B
+Events
+events/import, badge-print, footfall
+1B
+GPS
+attendance/gps, geofences
+1B
+Emergency
+emergency/trigger, status
+1B
+ERP
+integrations/erp/sync, integrations
+1B
+ZepIris (internal)
+faces/insert, search, upsert, delete, get + ML endpoints
+7
+
+End of API Reference Part 2 — 100% endpoint coverage achieved
+

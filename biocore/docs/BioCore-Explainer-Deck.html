@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>One Face, Every Place</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+
+<style>
+/* ============ TOKENS: complete light palette on bare :root ============ */
+:root{
+  --ground:#F4F2FB;
+  --surface:#FFFFFF;
+  --surface-2:#EDEAF7;
+  --ink:#221C36;
+  --ink-soft:#4A4265;
+  --muted:#6B6480;
+  --line:#DDD8EC;
+  --line-strong:#C4BCDD;
+
+  --violet:#6D28D9;
+  --violet-soft:#EDE7FB;
+  --violet-ink:#4C1D95;
+  --crimson:#C8011A;
+  --crimson-soft:#FBE7E9;
+  --crimson-ink:#8E0113;
+  --slate:#8A8698;
+  --slate-soft:#EAE8EF;
+
+  --shadow:0 1px 2px rgba(34,28,54,.05), 0 12px 32px -12px rgba(34,28,54,.18);
+  --shadow-lift:0 2px 4px rgba(34,28,54,.06), 0 28px 60px -20px rgba(34,28,54,.28);
+
+  --display:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --machine:"Space Grotesk",ui-monospace,"Segoe UI",sans-serif;
+  --data:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#141020;
+    --surface:#1E1832;
+    --surface-2:#272041;
+    --ink:#EFEBFA;
+    --ink-soft:#C6BEE2;
+    --muted:#9C93BA;
+    --line:#332B4F;
+    --line-strong:#473C6B;
+
+    --violet:#A784F5;
+    --violet-soft:#2A2048;
+    --violet-ink:#C9B2FF;
+    --crimson:#FF5C6E;
+    --crimson-soft:#3A1620;
+    --crimson-ink:#FF8D99;
+    --slate:#9E99B0;
+    --slate-soft:#272138;
+
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.6);
+    --shadow-lift:0 2px 4px rgba(0,0,0,.45), 0 28px 60px -20px rgba(0,0,0,.75);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#141020;
+  --surface:#1E1832;
+  --surface-2:#272041;
+  --ink:#EFEBFA;
+  --ink-soft:#C6BEE2;
+  --muted:#9C93BA;
+  --line:#332B4F;
+  --line-strong:#473C6B;
+
+  --violet:#A784F5;
+  --violet-soft:#2A2048;
+  --violet-ink:#C9B2FF;
+  --crimson:#FF5C6E;
+  --crimson-soft:#3A1620;
+  --crimson-ink:#FF8D99;
+  --slate:#9E99B0;
+  --slate-soft:#272138;
+
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.6);
+  --shadow-lift:0 2px 4px rgba(0,0,0,.45), 0 28px 60px -20px rgba(0,0,0,.75);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--display);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+
+/* ============ DECK SHELL ============ */
+.deck{position:relative;height:100vh;height:100dvh;width:100%;overflow:hidden}
+.rail{
+  position:absolute;top:0;left:0;height:100%;width:100%;
+  display:flex;
+  transition:transform .62s cubic-bezier(.6,.02,.2,1);
+  will-change:transform;
+}
+.slide{
+  flex:0 0 100%;
+  height:100%;
+  display:grid;
+  place-items:center;
+  padding:clamp(20px,4vw,64px) clamp(20px,5vw,80px);
+  overflow-y:auto;
+}
+.wrap{width:100%;max-width:1120px;margin:auto}
+
+/* enter animation */
+.slide .anim{opacity:0;transform:translateY(18px)}
+.slide.live .anim{animation:rise .62s cubic-bezier(.2,.7,.3,1) forwards}
+.slide.live .anim:nth-child(1){animation-delay:.06s}
+.slide.live .anim:nth-child(2){animation-delay:.14s}
+.slide.live .anim:nth-child(3){animation-delay:.22s}
+.slide.live .anim:nth-child(4){animation-delay:.30s}
+.slide.live .anim:nth-child(5){animation-delay:.38s}
+.slide.live .anim:nth-child(6){animation-delay:.46s}
+@keyframes rise{to{opacity:1;transform:none}}
+
+/* ============ TYPE ============ */
+.eyebrow{
+  font-family:var(--machine);
+  font-size:.72rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);
+  display:flex;align-items:center;gap:.7rem;margin:0 0 1.1rem;
+}
+.eyebrow::before{content:"";width:26px;height:2px;background:var(--accent,var(--violet));border-radius:2px}
+h1{
+  font-size:clamp(2.4rem,6.4vw,4.6rem);font-weight:800;line-height:1.02;
+  letter-spacing:-.035em;margin:0 0 1rem;text-wrap:balance;
+}
+h2{
+  font-size:clamp(1.75rem,4.1vw,3.05rem);font-weight:800;line-height:1.08;
+  letter-spacing:-.03em;margin:0 0 1rem;text-wrap:balance;
+}
+h3{font-size:1.06rem;font-weight:700;letter-spacing:-.012em;margin:0 0 .38rem}
+.lede{
+  font-size:clamp(1.02rem,1.75vw,1.32rem);line-height:1.55;color:var(--ink-soft);
+  max-width:60ch;margin:0 0 1.6rem;font-weight:400;
+}
+p{margin:0 0 .5rem;line-height:1.6}
+.sm{font-size:.92rem;color:var(--muted);line-height:1.55}
+strong{font-weight:700;color:var(--ink)}
+.hl-v{color:var(--violet)}
+.hl-c{color:var(--crimson)}
+
+/* ============ COMPONENTS ============ */
+.cards{display:grid;gap:clamp(12px,1.5vw,18px)}
+.c-2{grid-template-columns:repeat(2,1fr)}
+.c-3{grid-template-columns:repeat(3,1fr)}
+.c-4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:860px){.c-3,.c-4{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.c-2,.c-3,.c-4{grid-template-columns:1fr}}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:clamp(16px,2vw,22px);box-shadow:var(--shadow);
+}
+.card.bad{border-color:color-mix(in srgb,var(--crimson) 26%,var(--line))}
+.card.good{border-color:color-mix(in srgb,var(--violet) 30%,var(--line))}
+
+.ico{
+  width:42px;height:42px;border-radius:11px;display:grid;place-items:center;
+  margin-bottom:.85rem;background:var(--violet-soft);color:var(--violet);flex:none;
+}
+.card.bad .ico{background:var(--crimson-soft);color:var(--crimson)}
+.ico svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* numbered steps — a real sequence, so numbers carry meaning */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(12px,1.6vw,20px);
+  counter-reset:s;position:relative}
+@media (max-width:860px){.steps{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.steps{grid-template-columns:1fr}}
+.step{
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:clamp(16px,2vw,22px);box-shadow:var(--shadow);position:relative;
+}
+.step .n{
+  font-family:var(--machine);font-size:.74rem;font-weight:700;letter-spacing:.1em;
+  color:var(--violet);background:var(--violet-soft);
+  width:30px;height:30px;border-radius:9px;display:grid;place-items:center;margin-bottom:.8rem;
+}
+
+/* terminal result cards — mirrors the real guard console states */
+.term{
+  border-radius:18px;padding:clamp(18px,2.4vw,26px);text-align:center;
+  border:2px solid;font-family:var(--machine);position:relative;overflow:hidden;
+}
+.term .state{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;font-weight:600;opacity:.75}
+.term .big{font-size:clamp(1.15rem,2.2vw,1.5rem);font-weight:700;margin:.5rem 0 .2rem;letter-spacing:-.02em}
+.term .why{font-size:.86rem;font-family:var(--data);opacity:.85}
+.t-ok{background:var(--violet-soft);border-color:var(--violet);color:var(--violet-ink)}
+.t-no{background:var(--crimson-soft);border-color:var(--crimson);color:var(--crimson-ink)}
+.t-unk{background:var(--slate-soft);border-color:var(--line-strong);color:var(--muted)}
+
+/* scanning face ring */
+.scanwrap{display:grid;place-items:center;gap:.9rem}
+.ring{position:relative;width:clamp(128px,17vw,178px);aspect-ratio:1;border-radius:50%;
+  background:var(--surface);border:2px solid var(--line-strong);display:grid;place-items:center}
+.ring svg.face{width:52%;height:52%;fill:none;stroke:var(--muted);stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.ring::after{
+  content:"";position:absolute;inset:-2px;border-radius:50%;
+  border:2px solid transparent;border-top-color:var(--violet);border-right-color:var(--violet);
+  animation:spin 1.5s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* verticals */
+.vgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:900px){.vgrid{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:600px){.vgrid{grid-template-columns:repeat(2,1fr)}}
+.v{
+  background:var(--surface);border:1px solid var(--line);border-radius:13px;
+  padding:.85rem .8rem;display:flex;align-items:center;gap:.6rem;
+  font-size:.87rem;font-weight:600;line-height:1.25;
+}
+.v svg{width:19px;height:19px;flex:none;fill:none;stroke:var(--violet);stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* figures */
+figure{margin:0}
+figure svg{width:100%;height:auto;max-width:100%;display:block;color:var(--ink)}
+/* SVG semantic colors go through tokens so BOTH themes resolve (never a raw hex) */
+.s-v{stroke:var(--violet)} .f-v{fill:var(--violet)} .tx-v{fill:var(--violet)}
+.s-c{stroke:var(--crimson)} .f-c{fill:var(--crimson)} .tx-c{fill:var(--crimson)}
+.f-surf{fill:var(--surface)}
+figcaption{font-family:var(--data);font-size:.87rem;color:var(--muted);
+  margin-top:.85rem;line-height:1.55;max-width:70ch}
+.figbox{background:var(--surface);border:1px solid var(--line);border-radius:18px;
+  padding:clamp(16px,2.4vw,28px);box-shadow:var(--shadow);overflow-x:auto}
+
+.stat{display:flex;flex-direction:column;gap:.15rem}
+.stat b{font-family:var(--machine);font-size:clamp(1.5rem,3.4vw,2.3rem);font-weight:700;
+  letter-spacing:-.03em;color:var(--violet);font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted);font-weight:500}
+
+.pill{
+  display:inline-flex;align-items:center;gap:.42rem;font-family:var(--machine);
+  font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  padding:.4rem .75rem;border-radius:999px;border:1px solid var(--line-strong);
+  color:var(--muted);background:var(--surface);
+}
+.pill.v{color:var(--violet);border-color:color-mix(in srgb,var(--violet) 40%,transparent);
+  background:var(--violet-soft)}
+
+.split{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,3.4vw,48px);align-items:center}
+@media (max-width:880px){.split{grid-template-columns:1fr}}
+
+/* ============ CHROME ============ */
+.chrome{
+  position:absolute;left:0;right:0;bottom:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 clamp(16px,3vw,34px) clamp(14px,2vw,22px);
+  pointer-events:none;z-index:20;gap:1rem;
+}
+.brand{font-family:var(--machine);font-size:.74rem;font-weight:600;letter-spacing:.1em;
+  color:var(--muted);text-transform:uppercase}
+.dots{display:flex;gap:6px;pointer-events:auto}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--line-strong);border:0;padding:0;
+  cursor:pointer;transition:all .3s}
+.dot:hover{background:var(--muted)}
+.dot.on{background:var(--violet);width:22px;border-radius:4px}
+.dot:focus-visible{outline:2px solid var(--violet);outline-offset:3px}
+.nav{display:flex;gap:8px;pointer-events:auto}
+.nav button{
+  width:38px;height:38px;border-radius:11px;border:1px solid var(--line-strong);
+  background:var(--surface);color:var(--ink);cursor:pointer;display:grid;place-items:center;
+  transition:all .2s;box-shadow:var(--shadow);
+}
+.nav button:hover:not(:disabled){border-color:var(--violet);color:var(--violet);transform:translateY(-1px)}
+.nav button:disabled{opacity:.32;cursor:default}
+.nav button:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+.nav svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.1;
+  stroke-linecap:round;stroke-linejoin:round}
+.counter{font-family:var(--machine);font-size:.76rem;color:var(--muted);
+  font-variant-numeric:tabular-nums;letter-spacing:.05em}
+.progress{position:absolute;top:0;left:0;height:3px;background:var(--violet);
+  transition:width .62s cubic-bezier(.6,.02,.2,1);z-index:30;border-radius:0 3px 3px 0}
+
+.hint{
+  position:absolute;top:clamp(14px,2vw,22px);right:clamp(16px,3vw,34px);
+  font-family:var(--machine);font-size:.68rem;letter-spacing:.08em;color:var(--muted);
+  text-transform:uppercase;z-index:20;opacity:.8;
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::after,*::before{animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important}
+  .slide .anim{opacity:1;transform:none}
+}
+</style>
+
+<div class="deck">
+  <div class="progress" id="prog"></div>
+  <div class="hint">← → to move</div>
+  <div class="rail" id="rail">
+
+    <!-- ============ 1 TITLE ============ -->
+    <section class="slide">
+      <div class="wrap" style="text-align:center">
+        <div class="anim" style="display:flex;justify-content:center;margin-bottom:1.6rem">
+          <span class="pill v">Face-first attendance &amp; access</span>
+        </div>
+        <h1 class="anim">One face.<br>Every place.</h1>
+        <p class="anim lede" style="margin:0 auto 2.2rem;text-align:center">
+          A person proves who they are <strong>once</strong> — then walks through any door
+          they're allowed through. No card. No PIN. No fingerprint pad.
+        </p>
+        <div class="anim cards c-3" style="max-width:760px;margin:0 auto">
+          <div class="stat"><b>&lt;2s</b><span>to check in</span></div>
+          <div class="stat"><b>1 tap</b><span>to join the next place</span></div>
+          <div class="stat"><b>0</b><span>photos stored</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 2 PROBLEM ============ -->
+    <section class="slide" style="--accent:var(--crimson)">
+      <div class="wrap">
+        <p class="eyebrow anim">The problem</p>
+        <h2 class="anim">Knowing who actually walked in is still guesswork.</h2>
+        <p class="anim lede">Every method in use today breaks in a predictable way.</p>
+        <div class="anim cards c-4">
+          <div class="card bad">
+            <div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+            <h3>Cards get shared</h3>
+            <p class="sm">One card, many people. A friend punches you in. Nobody can prove otherwise.</p>
+          </div>
+          <div class="card bad">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5v3M12 3a5 5 0 0 1 5 5v6M7 14c0 4 1 6 1 6M17 17c0 2-1 4-1 4M12 8v8"/></svg></div>
+            <h3>Fingerprints are slow</h3>
+            <p class="sm">A queue at 9am, wet or worn fingers fail, and everyone touches the same pad.</p>
+          </div>
+          <div class="card bad">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h4"/></svg></div>
+            <h3>Visitor books are useless</h3>
+            <p class="sm">In a fire, a paper register cannot tell you who is still inside the building.</p>
+          </div>
+          <div class="card bad">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></div>
+            <h3>Re-enrol everywhere</h3>
+            <p class="sm">Your office, your gym, your child's school — each one scans your face all over again.</p>
+          </div>
+        </div>
+        <div class="anim card bad" style="margin-top:clamp(14px,2vw,20px);display:flex;gap:1rem;align-items:flex-start">
+          <div class="ico" style="margin:0"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 9v4M12 16h.01"/></svg></div>
+          <div>
+            <h3>And now it's a legal problem, not just an operational one.</h3>
+            <p class="sm">India's <strong>DPDP Act</strong> treats a face as sensitive personal data. Most attendance systems
+            store the actual photograph — which means consent, deletion and proof are now obligations they cannot meet.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 3 THE TURN ============ -->
+    <section class="slide">
+      <div class="wrap" style="text-align:center">
+        <p class="eyebrow anim" style="justify-content:center">The idea</p>
+        <h2 class="anim">Your face becomes your badge —<br>and you decide where it works.</h2>
+        <p class="anim lede" style="margin:0 auto 2rem;text-align:center">
+          You verify yourself one time. After that, joining a new place is a single tap —
+          because the identity already exists and <strong>you</strong> grant permission to each place.
+        </p>
+        <div class="anim cards c-3">
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 13s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></div>
+            <h3>Fast</h3><p class="sm">Look at a camera. Under two seconds, hands-free, nothing to carry or remember.</p>
+          </div>
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+            <h3>Private</h3><p class="sm">The photograph is thrown away. Only a string of numbers is kept — and it can't be turned back into your face.</p>
+          </div>
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+            <h3>Provable</h3><p class="sm">Every consent, entry and deletion is recorded — so the business can show a regulator exactly what happened.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 4 HOW IT WORKS ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">How it works</p>
+        <h2 class="anim">Four steps. The first one happens only once.</h2>
+        <p class="anim lede">Steps 3 and 4 are what a person does every day. They take about two seconds.</p>
+        <div class="anim steps">
+          <div class="step">
+            <div class="n">01</div>
+            <h3>Agree, then scan</h3>
+            <p class="sm">You tick four plain-language boxes — what it's for, that it's sensitive, what your rights are,
+            and that nobody forced you. Then the camera captures your face.</p>
+          </div>
+          <div class="step">
+            <div class="n">02</div>
+            <h3>Join a place</h3>
+            <p class="sm">Your office invites you. You tap <strong>allow</strong>. No second scan — your existing identity is
+            reused, with your permission, for that one place.</p>
+          </div>
+          <div class="step">
+            <div class="n">03</div>
+            <h3>Walk up and look</h3>
+            <p class="sm">At the gate, the camera sees you and matches you. The screen says <span class="hl-v">Welcome</span>
+            — or explains why not.</p>
+          </div>
+          <div class="step">
+            <div class="n">04</div>
+            <h3>The business sees it</h3>
+            <p class="sm">Who is inside right now, who came late, who was refused and why — updating live on a dashboard.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 5 THE PRIVACY MECHANISM ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">The part that matters most</p>
+        <h2 class="anim">We never keep your photograph.</h2>
+        <p class="anim lede">This is the single hardest thing to believe, so here is exactly what happens
+        in the moment your face is captured.</p>
+        <div class="anim figbox">
+          <figure>
+            <svg viewBox="0 0 900 300" role="img" aria-label="The camera measures the face, converts it into a list of numbers which is locked away, and deletes the photograph immediately.">
+              <defs>
+                <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0L10 5L0 10z" fill="currentColor"/>
+                </marker>
+                <marker id="arv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0L10 5L0 10z" class="f-v"/>
+                </marker>
+                <marker id="arc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0L10 5L0 10z" class="f-c"/>
+                </marker>
+              </defs>
+
+              <!-- 1 face -->
+              <circle cx="82" cy="96" r="46" fill="none" stroke="currentColor" stroke-width="2"/>
+              <circle cx="68" cy="86" r="3.5" fill="currentColor"/>
+              <circle cx="96" cy="86" r="3.5" fill="currentColor"/>
+              <path d="M68 110q14 11 28 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <text x="82" y="167" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Your face</text>
+
+              <!-- arrow 1 -->
+              <line x1="140" y1="96" x2="248" y2="96" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
+              <text x="194" y="86" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="12" fill="currentColor">measures</text>
+
+              <!-- 2 numbers -->
+              <rect x="256" y="52" width="222" height="88" rx="12" fill="none" stroke="currentColor" stroke-width="2"/>
+              <text x="367" y="86" text-anchor="middle" font-family="IBM Plex Sans,sans-serif" font-size="13" fill="currentColor">0.18  −0.09  0.77  0.04</text>
+              <text x="367" y="108" text-anchor="middle" font-family="IBM Plex Sans,sans-serif" font-size="13" fill="currentColor">−0.31  0.66  0.12  …</text>
+              <text x="367" y="167" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">A list of 512 numbers</text>
+
+              <!-- arrow 2 -->
+              <line x1="486" y1="96" x2="594" y2="96" class="s-v" stroke-width="2.4" marker-end="url(#arv)"/>
+              <text x="540" y="86" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="12" font-weight="600" class="tx-v">locked away</text>
+
+              <!-- 3 vault -->
+              <rect x="602" y="52" width="150" height="88" rx="12" fill="none" class="s-v" stroke-width="2.4"/>
+              <rect x="655" y="80" width="44" height="34" rx="5" fill="none" class="s-v" stroke-width="2.2"/>
+              <path d="M663 80V72a14 14 0 0 1 28 0v8" fill="none" class="s-v" stroke-width="2.2"/>
+              <text x="677" y="167" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="12.5" font-weight="600" class="tx-v">Kept, encrypted</text>
+
+              <!-- branch: photo deleted -->
+              <path d="M82 142 L82 216" class="s-c" stroke-width="2.4" fill="none" marker-end="url(#arc)"/>
+              <text x="98" y="188" font-family="Space Grotesk,sans-serif" font-size="12" font-weight="600" class="tx-c">immediately</text>
+              <rect x="36" y="224" width="92" height="56" rx="10" fill="none" class="s-c" stroke-width="2.4"/>
+              <path d="M58 246l48 34M106 246l-48 34" class="s-c" stroke-width="2.4" stroke-linecap="round"/>
+              <text x="146" y="258" font-family="Space Grotesk,sans-serif" font-size="13.5" font-weight="700" class="tx-c">The photograph is deleted</text>
+              <text x="146" y="276" font-family="IBM Plex Sans,sans-serif" font-size="12.5" fill="currentColor">It is never written to a disk, never sent anywhere, never seen by staff.</text>
+            </svg>
+            <figcaption>Matching later compares <em>numbers against numbers</em> — never one picture against another.
+            You cannot reconstruct a face from the numbers, which is why a stolen database is far less dangerous than a folder of photographs.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 6 AT THE GATE ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">At the door</p>
+        <h2 class="anim">Three things can happen. All of them are clear.</h2>
+        <div class="anim split" style="margin-top:1.4rem">
+          <div class="scanwrap">
+            <div class="ring">
+              <svg class="face" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="9" cy="10" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r=".9" fill="currentColor" stroke="none"/><path d="M8.5 14.5q3.5 2.6 7 0"/></svg>
+            </div>
+            <p class="sm" style="text-align:center;max-width:34ch">
+              The screen only scans when a real face fills the circle — so it never grabs
+              passers-by in the background.
+            </p>
+          </div>
+          <div style="display:grid;gap:12px">
+            <div class="term t-ok">
+              <div class="state">Recognised</div>
+              <div class="big">Welcome, Rahul Kumar</div>
+              <div class="why">Checked in · 09:04</div>
+            </div>
+            <div class="term t-no">
+              <div class="state">Refused</div>
+              <div class="big">Access denied</div>
+              <div class="why">Not permitted in this building after 6pm</div>
+            </div>
+            <div class="term t-unk">
+              <div class="state">Unknown</div>
+              <div class="big">Not recognised</div>
+              <div class="why">Guard can enrol them as a visitor, on the spot</div>
+            </div>
+          </div>
+        </div>
+        <p class="anim sm" style="margin-top:1.3rem;max-width:74ch">
+          A refusal always comes with a <strong>reason</strong> — never a blank red screen. That matters when a
+          real person is standing at a gate with people queueing behind them.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 7 ENROL ONCE ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">Why it gets better over time</p>
+        <h2 class="anim">Scan once. Reuse with permission. Switch off any time.</h2>
+        <div class="anim figbox" style="margin-top:.4rem">
+          <figure>
+            <svg viewBox="0 0 900 268" role="img" aria-label="One person's single face record is reused across an office, a school and a gym, each governed by its own permission switch that the person can turn off.">
+              <defs>
+                <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0L10 5L0 10z" class="f-v"/>
+                </marker>
+              </defs>
+
+              <!-- person -->
+              <circle cx="86" cy="118" r="30" fill="none" stroke="currentColor" stroke-width="2"/>
+              <circle cx="86" cy="108" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+              <path d="M69 136a20 20 0 0 1 34 0" fill="none" stroke="currentColor" stroke-width="2"/>
+              <text x="86" y="172" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">One person</text>
+              <text x="86" y="190" text-anchor="middle" font-family="IBM Plex Sans,sans-serif" font-size="11.5" fill="currentColor">scanned once</text>
+
+              <!-- arrows to three places -->
+              <path d="M124 100 C 200 62, 250 54, 322 54" fill="none" class="s-v" stroke-width="2.2" marker-end="url(#ar2)"/>
+              <path d="M126 118 L 322 118" fill="none" class="s-v" stroke-width="2.2" marker-end="url(#ar2)"/>
+              <path d="M124 136 C 200 174, 250 182, 322 182" fill="none" class="s-v" stroke-width="2.2" marker-end="url(#ar2)"/>
+              <text x="224" y="104" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-size="11.5" font-weight="600" class="tx-v">you tap “allow”</text>
+
+              <!-- three place boxes -->
+              <rect x="332" y="26" width="240" height="56" rx="11" fill="none" stroke="currentColor" stroke-width="2"/>
+              <text x="352" y="59" font-family="Space Grotesk,sans-serif" font-size="13.5" font-weight="600" fill="currentColor">Your office</text>
+              <rect x="332" y="90" width="240" height="56" rx="11" fill="none" stroke="currentColor" stroke-width="2"/>
+              <text x="352" y="123" font-family="Space Grotesk,sans-serif" font-size="13.5" font-weight="600" fill="currentColor">Your child’s school</text>
+              <rect x="332" y="154" width="240" height="56" rx="11" fill="none" stroke="currentColor" stroke-width="2"/>
+              <text x="352" y="187" font-family="Space Grotesk,sans-serif" font-size="13.5" font-weight="600" fill="currentColor">Your gym</text>
+
+              <!-- switches -->
+              <rect x="504" y="44" width="46" height="22" rx="11" class="f-v"/>
+              <circle cx="539" cy="55" r="8" class="f-surf"/>
+              <rect x="504" y="108" width="46" height="22" rx="11" class="f-v"/>
+              <circle cx="539" cy="119" r="8" class="f-surf"/>
+              <rect x="504" y="172" width="46" height="22" rx="11" fill="none" class="s-c" stroke-width="2"/>
+              <circle cx="515" cy="183" r="8" class="f-c"/>
+
+              <text x="596" y="60" font-family="IBM Plex Sans,sans-serif" font-size="12.5" fill="currentColor">on — face works here</text>
+              <text x="596" y="124" font-family="IBM Plex Sans,sans-serif" font-size="12.5" fill="currentColor">on — face works here</text>
+              <text x="596" y="188" font-family="IBM Plex Sans,sans-serif" font-size="12.5" font-weight="600" class="tx-c">off — you withdrew it</text>
+
+              <text x="332" y="246" font-family="IBM Plex Sans,sans-serif" font-size="12.5" fill="currentColor">Switching one off does not affect the others, and takes effect immediately.</text>
+            </svg>
+            <figcaption>Each place holds a <em>permission</em>, not a copy of your face. That's why the third place can be
+            switched off without touching the first two — and why joining a new place needs no second scan.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 8 WHERE ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">Where it's used</p>
+        <h2 class="anim">Anywhere a door, a register, or a headcount matters.</h2>
+        <p class="anim lede">The same system underneath — only the rules on top change.</p>
+        <div class="anim vgrid">
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5"/></svg>Offices &amp; floors</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5-9 5z"/><path d="M7 12v5c0 1 2 2 5 2s5-1 5-2v-5"/></svg>Schools &amp; colleges</div>
+          <div class="v"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a4 4 0 0 1 8 0v2M8 12h8"/></svg>Exam halls</div>
+          <div class="v"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="11" rx="2"/><path d="M17 11h3l2 3v4h-5"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg>School bus boarding</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>Hostels</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 20V10M18 20V10M4 10h16l-8-6z"/></svg>Factories &amp; warehouses</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M12 2l9 4v6c0 5-4 9-9 10-5-1-9-5-9-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Hazardous zones &amp; PPE</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg>Hospitals</div>
+          <div class="v"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8V6a5 5 0 0 1 10 0v2M12 13v3"/></svg>Banks &amp; vaults</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13"/><path d="M4 13h16M10 21v-4h4v4"/></svg>Gated societies</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M6 9h12M6 15h12"/></svg>Gyms &amp; clubs</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M3 10h18v10H3z"/><path d="M8 10V6h8v4M12 14v3"/></svg>Events &amp; VIP zones</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M4 20V7l8-4 8 4v13"/><path d="M9 20v-7h6v7"/></svg>Hotels</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M3 21h18M6 21V11l6-7 6 7v10M11 21v-4h2v4"/></svg>Government offices</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M4 21h16M7 21v-9l5-4 5 4v9"/><path d="M12 3v3"/></svg>Temples &amp; trusts</div>
+          <div class="v"><svg viewBox="0 0 24 24"><path d="M3 20h18M7 20V9M17 20V9M5 9h14l-7-5z"/><path d="M11 20v-5h2v5"/></svg>Construction sites</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 9 WHAT BUSINESS GETS ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">For the organisation</p>
+        <h2 class="anim">The questions a manager actually asks.</h2>
+        <div class="anim cards c-2" style="margin-top:.6rem">
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9.5" r="2.6"/><path d="M16 20a5.5 5.5 0 0 1 6-4.6"/></svg></div>
+            <h3>“Who is inside right now?”</h3>
+            <p class="sm">A live count, by building and by zone. In a fire drill or a real evacuation, that list is the
+            difference between a headcount and a guess.</p>
+          </div>
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
+            <h3>“Who was late, and how often?”</h3>
+            <p class="sm">Attendance that nobody has to type in, tally, or argue about — because the gate recorded it.</p>
+          </div>
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg></div>
+            <h3>“Tell me when something's wrong.”</h3>
+            <p class="sm">A barred person at the gate. Someone entering a restricted area. A child who hasn't arrived
+            by the cut-off — the parent gets a message.</p>
+          </div>
+          <div class="card good">
+            <div class="ico"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-7-4-7 4z"/><path d="M9 9h6M9 13h4"/></svg></div>
+            <h3>“Prove it to an auditor.”</h3>
+            <p class="sm">Every entry, consent and deletion is written to a record that cannot be quietly edited afterwards.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 10 PRIVACY / LAW ============ -->
+    <section class="slide">
+      <div class="wrap">
+        <p class="eyebrow anim">The law</p>
+        <h2 class="anim">Built for DPDP from the first line, not patched on later.</h2>
+        <p class="anim lede">India's data-protection law asks four things of anyone handling a face.
+        Here's how each is answered.</p>
+        <div class="anim cards c-2">
+          <div class="card good">
+            <h3><span class="hl-v">Consent</span> before capture</h3>
+            <p class="sm">Four plain-language tick-boxes, recorded with a timestamp. No consent, no scan — the system
+            physically refuses to enrol.</p>
+          </div>
+          <div class="card good">
+            <h3><span class="hl-v">Minimum</span> data kept</h3>
+            <p class="sm">The photograph is destroyed at capture. Only the number-string survives, encrypted.</p>
+          </div>
+          <div class="card good">
+            <h3><span class="hl-v">Erasure</span> on request</h3>
+            <p class="sm">One tap removes your face from one place — or from everything, everywhere, with a certificate
+            confirming it's gone.</p>
+          </div>
+          <div class="card good">
+            <h3><span class="hl-v">A way to complain</span></h3>
+            <p class="sm">A built-in grievance channel, because the law requires a named route for people to raise problems.</p>
+          </div>
+        </div>
+        <p class="anim sm" style="margin-top:1.2rem;max-width:78ch">
+          For children, consent belongs to a parent or guardian — and there is always a
+          <strong>manual lane</strong> for families who decline, so nobody is shut out for saying no.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 11 CLOSE ============ -->
+    <section class="slide">
+      <div class="wrap" style="text-align:center">
+        <p class="eyebrow anim" style="justify-content:center">In one breath</p>
+        <h2 class="anim">Prove who you are once.<br>Use it everywhere you're allowed.</h2>
+        <p class="anim lede" style="margin:0 auto 2rem;text-align:center">
+          Faster than a card, cleaner than a fingerprint, and the only one of the three that can
+          survive a privacy audit.
+        </p>
+        <div class="anim cards c-3" style="max-width:860px;margin:0 auto">
+          <div class="card">
+            <h3 class="hl-c">The problem</h3>
+            <p class="sm">Cards are shared, fingerprints queue, paper can't do a headcount — and storing photos is now a liability.</p>
+          </div>
+          <div class="card good">
+            <h3 class="hl-v">What we do</h3>
+            <p class="sm">Face check-in under two seconds, one identity reused by permission, photograph never stored.</p>
+          </div>
+          <div class="card">
+            <h3>Where</h3>
+            <p class="sm">Offices, schools, factories, hospitals, events, societies — anywhere a door or a register matters.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="chrome">
+    <span class="brand">BioCore</span>
+    <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span class="counter" id="count">01 / 11</span>
+      <div class="nav">
+        <button id="prev" aria-label="Previous slide"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button id="next" aria-label="Next slide"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var rail=document.getElementById('rail');
+  var slides=Array.prototype.slice.call(rail.querySelectorAll('.slide'));
+  var dots=document.getElementById('dots');
+  var prev=document.getElementById('prev'), next=document.getElementById('next');
+  var count=document.getElementById('count'), prog=document.getElementById('prog');
+  var i=0, n=slides.length;
+
+  slides.forEach(function(s,k){
+    var b=document.createElement('button');
+    b.className='dot'; b.type='button';
+    b.setAttribute('role','tab');
+    b.setAttribute('aria-label','Slide '+(k+1));
+    b.addEventListener('click',function(){go(k)});
+    dots.appendChild(b);
+  });
+  var dotEls=Array.prototype.slice.call(dots.children);
+
+  function pad(x){return (x<10?'0':'')+x}
+
+  function go(k){
+    i=Math.max(0,Math.min(n-1,k));
+    rail.style.transform='translateX('+(-i*100)+'%)';
+    dotEls.forEach(function(d,j){
+      d.classList.toggle('on',j===i);
+      d.setAttribute('aria-selected',j===i?'true':'false');
+    });
+    slides.forEach(function(s,j){
+      s.classList.remove('live');
+      s.setAttribute('aria-hidden',j===i?'false':'true');
+    });
+    // restart entrance animation on the active slide
+    void slides[i].offsetWidth;
+    slides[i].classList.add('live');
+    count.textContent=pad(i+1)+' / '+pad(n);
+    prog.style.width=((i+1)/n*100)+'%';
+    prev.disabled=(i===0); next.disabled=(i===n-1);
+  }
+
+  next.addEventListener('click',function(){go(i+1)});
+  prev.addEventListener('click',function(){go(i-1)});
+
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){e.preventDefault();go(i+1)}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(i-1)}
+    else if(e.key==='Home'){e.preventDefault();go(0)}
+    else if(e.key==='End'){e.preventDefault();go(n-1)}
+  });
+
+  // touch swipe
+  var x0=null,y0=null;
+  rail.addEventListener('touchstart',function(e){x0=e.touches[0].clientX;y0=e.touches[0].clientY},{passive:true});
+  rail.addEventListener('touchend',function(e){
+    if(x0===null)return;
+    var dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
+    if(Math.abs(dx)>56 && Math.abs(dx)>Math.abs(dy)) go(dx<0?i+1:i-1);
+    x0=null;y0=null;
+  },{passive:true});
+
+  go(0);
+})();
+</script>
+
+</body>
+</html>

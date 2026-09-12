@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Connect as a NON-superuser so RLS (FORCE) is actually enforced in tests.
+      DATABASE_URL: postgresql+psycopg://biocore:biocore@localhost:5432/biocore
+      FAKE_ZEPIRIS: "false"   # respx mocks the real adapter in tests
+      FAKE_REDIS: "true"      # in-memory Redis; no broker needed in CI
+      COOKIE_SECURE: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create non-superuser role + db
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE ROLE biocore LOGIN PASSWORD 'biocore';"
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE biocore OWNER biocore;"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Migrate
+        run: alembic upgrade head
+      - name: Test (with coverage)
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=70
+
+  security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: SAST (bandit — fail on medium/high)
+        run: bandit -r app -ll
+      - name: Dependency CVEs (pip-audit — informational)
+        run: pip-audit -r requirements.txt || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

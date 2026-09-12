@@ -1,0 +1,51 @@
+# Daily PostgreSQL backup (Doc 5 §3.3). Runs pg_dump as a SUPERUSER (FORCE RLS
+# blocks owner dumps), writes to a PVC, prunes >30 days. Pair with an offsite
+# sync (rclone/mc to object storage) and a monthly restore drill (restore.sh).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: biocore-backups
+  namespace: biocore
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-backup
+  namespace: biocore
+spec:
+  schedule: "0 2 * * *"          # 02:00 daily
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-backup
+              image: postgres:16
+              env:
+                - name: BACKUP_DATABASE_URL   # superuser/BYPASSRLS libpq URL
+                  valueFrom:
+                    secretKeyRef: { name: biocore-secrets, key: BACKUP_DATABASE_URL }
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  f=/backups/pg-$(date +%Y%m%d-%H%M%S).dump
+                  echo "dumping -> $f"
+                  pg_dump --format=custom "$BACKUP_DATABASE_URL" -f "$f"
+                  find /backups -name 'pg-*.dump' -mtime +30 -delete
+                  echo "done"
+              volumeMounts:
+                - { name: backups, mountPath: /backups }
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: biocore-backups

@@ -1,0 +1,31 @@
+# Minimal infra for LOCAL TESTING — Postgres + Redis only.
+# Everything else (ZepIris/Milvus/MinIO/ML/RabbitMQ) is faked in-process via
+# FAKE_ZEPIRIS, so this is all you need to click through the whole app.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   # then run the backend + frontend on the host (see README "Test it locally").
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=biocore
+      - POSTGRES_PASSWORD=biocore
+      - POSTGRES_DB=biocore
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U biocore -d biocore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata_dev:
