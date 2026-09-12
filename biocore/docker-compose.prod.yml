@@ -1,0 +1,78 @@
+# BioCore — production stack for a single DigitalOcean droplet.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Four containers. Postgres and Redis are DigitalOcean MANAGED services (backups, failover and
+# patching are then someone else's job), so they are not here — put their connection strings in
+# .env. TLS certificates come from certbot on the host and are mounted read-only.
+#
+# Deliberately ABSENT, and why:
+#   zepiris-main / zepiris-ml   replaced by the BioVerify credential API (CREDENTIAL_ENGINE)
+#   milvus + etcd               only the ZepIris 1:N vector store; nothing reads it now
+#   minio                       only the legacy raw-image store; the verified-identity path
+#                               keeps no images at all
+#   rabbitmq                    optional. Leave RABBITMQ_URL unset and webhooks/notifications
+#                               run inline; set it and also run the `worker` profile
+#   prometheus / grafana        use DigitalOcean Monitoring, or add them back on a bigger box
+#
+# Verified on 2026-09-12: a DPDP erasure completes and self-verifies with none of Milvus, MinIO
+# or ZepIris present (stores_cleared = postgres, redis). That only holds for tenants with no
+# legacy face records — if you ever migrate one, ZepIris has to be reachable for its erasure.
+#
+# The app REFUSES TO START if this configuration is unsafe for production. See
+# backend/app/core/guards.py for the exact list; the logs name every problem.
+
+services:
+  gateway:
+    image: nginx:1.27
+    depends_on: [api, frontend]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/proxy_params.conf:/etc/nginx/proxy_params.conf:ro
+      # certbot writes here on the host: /etc/letsencrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+      - certbot-webroot:/var/www/certbot:ro
+    restart: unless-stopped
+    logging: &logs
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  frontend:
+    build: ./frontend
+    environment:
+      - NEXT_PUBLIC_API_BASE=/api/v1
+    expose:
+      - "3000"
+    restart: unless-stopped
+    logging: *logs
+
+  api:
+    build: ./backend
+    env_file: .env
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/api/v1/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    logging: *logs
+
+  # Only needed if RABBITMQ_URL is set. Start it with:
+  #   docker compose -f docker-compose.prod.yml --profile async up -d
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    profiles: ["async"]
+    restart: unless-stopped
+    logging: *logs
+
+volumes:
+  certbot-webroot:
