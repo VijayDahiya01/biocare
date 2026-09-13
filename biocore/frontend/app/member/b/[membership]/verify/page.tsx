@@ -24,6 +24,8 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
   const [level, setLevel] = useState<string>("face_only");
   const [selfie, setSelfie] = useState<string | null>(null);
   const [govId, setGovId] = useState("");
+  const [govRef, setGovRef] = useState<string | null>(null);
+  const [govOtp, setGovOtp] = useState("");
   const [acks, setAcks] = useState<Record<string, boolean>>({});
   const [business, setBusiness] = useState("");
   const [busy, setBusy] = useState(false);
@@ -97,6 +99,17 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
     else void complete(image, null);
   }
 
+  async function sendAadhaarCode() {
+    setErr(null); setBusy(true);
+    try {
+      const d = await api<{ reference_id: string }>(`/person/verify/${membership}/gov/otp`,
+        { method: "POST", body: { aadhaar_number: govId.replace(/\s/g, "") } });
+      setGovRef(d.reference_id);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not send the code. Check the number.");
+    } finally { setBusy(false); }
+  }
+
   async function complete(image: string, document: string | null) {
     setErr(null); setBusy(true);
     try {
@@ -104,7 +117,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
         `/person/verify/${membership}/complete`,
         { method: "POST",
           body: { reference: membership, image, document,
-                  government_id: govId.replace(/\s/g, "") || null } });
+                  gov_reference_id: govRef, gov_otp: govOtp || null } });
       if (d.verified) {
         // Keep the pass on this device so it can be shown without a signal. This is a
         // convenience copy only — the real one lives on the server, and clearing site data
@@ -203,11 +216,27 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
           <label htmlFor="govid">Aadhaar number</label>
           <input id="govid" inputMode="numeric" autoComplete="off" placeholder="1234 5678 9012"
                  value={govId} onChange={(e) => setGovId(e.target.value)} />
-          <button className="btn primary" style={{ width: "100%", marginTop: 14 }}
-                  disabled={busy || govId.replace(/\D/g, "").length !== 12}
-                  onClick={() => void complete(selfie || "", null)}>
-            {busy ? "Checking…" : "Verify me"}
-          </button>
+          {!govRef ? (
+            <button className="btn primary" style={{ width: "100%", marginTop: 14 }}
+                    disabled={busy || govId.replace(/\D/g, "").length !== 12}
+                    onClick={() => void sendAadhaarCode()}>
+              {busy ? "Sending…" : "Send me a code"}
+            </button>
+          ) : (
+            <>
+              <label htmlFor="govotp" style={{ marginTop: 12 }}>
+                Code sent to the mobile registered against this Aadhaar
+              </label>
+              <input id="govotp" inputMode="numeric" autoComplete="one-time-code"
+                     placeholder="6-digit code" value={govOtp}
+                     onChange={(e) => setGovOtp(e.target.value)} />
+              <button className="btn primary" style={{ width: "100%", marginTop: 14 }}
+                      disabled={busy || govOtp.replace(/\D/g, "").length < 4}
+                      onClick={() => void complete(selfie || "", null)}>
+                {busy ? "Checking…" : "Verify me"}
+              </button>
+            </>
+          )}
           <p className="app-sub" style={{ marginTop: 10, fontSize: 12 }}>
             Your number is used for this one check and is not stored — only whether the name and
             face matched.

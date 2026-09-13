@@ -58,5 +58,15 @@ class FakeGovernmentProvider:
         # A real provider returns the actual government face here; the fake returns a marker.
         return b"FAKE_GOV_PHOTO"
 
+    def aadhaar_okyc_send_otp(self, *, aadhaar_number: str, reason: str = "") -> str:
+        """Step 1 of the real flow, simulated. UIDAI would send a code to the mobile registered
+        against that Aadhaar; nothing is sent here and any six digits will verify. The fake
+        performs the SAME two steps as the real provider — a one-step fake would let a broken
+        two-step integration look correct in every test."""
+        digits = "".join(c for c in (aadhaar_number or "") if c.isdigit())
+        if len(digits) != 12:
+            raise GovernmentIdentityError("An Aadhaar number is 12 digits.", "invalid_request")
+        return f"fake-ref-{digits[-4:]}"
+
     def revoke_or_close_session(self, *, session: GovSession) -> None:
         return None

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.adapters.face_engine import FaceEngineError, get_face_engine
+from app.adapters.gov_identity import GovernmentIdentityError, get_gov_identity
 from app.core.db import bypass_rls
 from app.core.envelope import ApiError
 from app.core.policy import ConsentPurpose, VerificationOutcome
@@ -97,6 +98,27 @@ def start_verification(db: Session, *, person_id: str, membership_id: str,
                 "verification_level": t.verification_level or "face_only"}
 
 
+def send_government_otp(db: Session, *, person_id: str, membership_id: str,
+                        aadhaar_number: str) -> dict:
+    """Step 1 of an Aadhaar check: ask for a code to be sent to the registered mobile.
+
+    The number is used for this one request and never stored — only the provider's reference
+    comes back, which means nothing on its own and dies with the attempt.
+    """
+    with bypass_rls(db):
+        _membership(db, person_id, membership_id)      # must be their own membership
+    provider = get_gov_identity()
+    send = getattr(provider, "aadhaar_okyc_send_otp", None)
+    if send is None:
+        raise ApiError(501, "GOVERNMENT_OTP_UNSUPPORTED",
+                       "This government provider does not support Aadhaar OTP.")
+    try:
+        reference_id = send(aadhaar_number=aadhaar_number, reason="identity verification")
+    except GovernmentIdentityError as e:
+        raise ApiError(400, "AADHAAR_OTP_FAILED", str(e))
+    return {"reference_id": reference_id}
+
+
 def _compare_to_government_photo(gov_photo: bytes, live_image: str) -> tuple[bool, str]:
     """Match the live capture against the photo the government record returned.
 
@@ -120,7 +142,8 @@ def _compare_to_government_photo(gov_photo: bytes, live_image: str) -> tuple[boo
 def complete_verification(db: Session, *, person_id: str, membership_id: str, reference: str,
                           image: str, request_id: str | None, document: str | None = None,
                           document_type: str = "PASSPORT",
-                          government_id: str | None = None) -> dict:
+                          gov_reference_id: str | None = None,
+                          gov_otp: str | None = None) -> dict:
     with bypass_rls(db):
         u = _membership(db, person_id, membership_id)
         person = db.get(Person, person_id)
@@ -153,10 +176,16 @@ def complete_verification(db: Session, *, person_id: str, membership_id: str, re
         # gave us at sign-up, and — for Aadhaar, which returns a photo — their live face.
         gov_claims = identity_proofing.run_government_fetch(
             db, session=s, subject_ref=reference,
-            credential={"reference": reference, "expected_name": full_name,
-                        "government_id": government_id} if government_id else
-                       {"reference": reference, "expected_name": full_name},
+            credential=({"type": "aadhaar", "reference": reference,
+                         "expected_name": full_name,
+                         "reference_id": gov_reference_id, "otp": gov_otp}
+                        if gov_reference_id and gov_otp else
+                        {"reference": reference, "expected_name": full_name}),
             face_compare=_compare_to_government_photo, live_image=image)
+
+        if level == "face_and_government" and not (gov_reference_id and gov_otp):
+            raise ApiError(400, "GOVERNMENT_OTP_REQUIRED",
+                           "Enter your Aadhaar number and the code sent to your phone.")
 
         if level == "face_and_government":
             # Only meaningful at this level: the other levels never contacted a government
