@@ -82,11 +82,14 @@ class SoftwareKms:
 def get_kms() -> KmsProvider:
     provider = (settings.kms_provider or "software").lower()
     if provider in ("software", "dev", ""):
-        # SoftwareKms is a dev/MVP convenience — NEVER allowed in production (§6.5, §17.4).
-        if settings.is_production:
+        # SoftwareKms with no real root key derives from SESSION_SECRET/MASTER_KEY (§6.5,
+        # §17.4) — anyone who reads the app config can then decrypt every template. That is
+        # what production must never run on. A real KMS_ROOT_KEY closes that gap: this matches
+        # the acceptable minimum guards.py already documents and enforces at startup.
+        if settings.is_production and not settings.kms_root_key:
             raise KmsError(
-                "SoftwareKms is forbidden in production. Set KMS_PROVIDER to a real KMS/HSM "
-                "(aws | gcp | vault) before deploying."
+                "SoftwareKms with no KMS_ROOT_KEY is forbidden in production. Set KMS_ROOT_KEY "
+                "from a secret store, or set KMS_PROVIDER to a real KMS/HSM (aws | gcp | vault)."
             )
         return SoftwareKms()
     # Real backends (aws | gcp | vault | hsm) implement KmsProvider and wire in here.
