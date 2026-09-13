@@ -84,7 +84,7 @@ face, check-in history), events (register + per-event consent). Person self-serv
 Live face **inside a circle** with **MediaPipe** face detection (scans only when a real face
 fills the circle). Result states: Welcome / Goodbye+duration (violet), Access denied+reason /
 Blacklist "do not admit" (red), Not recognised → Enroll visitor (grey). Guard signs in
-(email+password+2FA) to unlock panels: **Alerts**, **Who's inside + Emergency muster**,
+(email+password) to unlock panels: **Alerts**, **Who's inside + Emergency muster**,
 **Enroll walk-in visitor**, **Pickup verify** (school), **Manual override**.
 
 ### 4C. Self-service kiosk 🖥️ (`/kiosk`) — unattended
@@ -175,7 +175,7 @@ worker); email/OTP (SMTP when configured). ✅ (SIS/HRMS/ticketing connectors �
 ---
 
 ## 8. Security ✅
-- Passwords **Argon2**; **TOTP 2FA** for admins; **OTP** for members.
+- Passwords **Argon2**; **OTP** for members.
 - **Redis-backed sessions**, HttpOnly cookies; **CSRF** via `X-CSRF-Token`; `COOKIE_SECURE`.
 - **Device tokens** stored **hashed** (raw shown once at pairing).
 - App connects to DB as a **non-superuser** so **FORCE RLS** is enforced; narrow
@@ -211,7 +211,7 @@ worker); email/OTP (SMTP when configured). ✅ (SIS/HRMS/ticketing connectors �
 
 ## 11. Data model (key tables)
 `tenants` (org, vertical, plan, org_code) · `users` (per-tenant, role, status, department,
-person_id, totp_secret) · `persons` (global identity) · `person_faces` (encrypted master
+person_id) · `persons` (global identity) · `person_faces` (encrypted master
 template) · `face_records` (vector reference, no raw image) · `business_invites` ·
 `event_registrations` · `devices` (hashed token, zone) · `zones` / `geofences` ·
 `attendance_log` (events) · `current_presence` (who's inside) · `badges` · `blacklist` ·
@@ -284,8 +284,8 @@ events) · reseller/white-label wholesale tier.
 ## 17. Testing & demo (local)
 - App: `http://localhost:3001` — user app (`/member/login`, Dev sign in), guard (`/guard`),
   kiosk (`/kiosk?token=…`), admin (`/admin/login`).
-- Demo tenant: **DEMO-2026**; admin **admin@acme.com / demopass123 + TOTP**; seed via
-  `scripts/seed_demo.py` (prints creds + live 2FA). Full steps in `docs/TEST_RUNBOOK.md`.
+- Demo tenant: **DEMO-2026**; admin **admin@acme.com / demopass123**; seed via
+  `scripts/seed_demo.py` (prints creds). Full steps in `docs/TEST_RUNBOOK.md`.
 - Dev face engine returns the most-recently-enrolled person; camera works on localhost/https
   only. Verify scripts: smoke, **acceptance (22/22)**, verify_person, verify_zepiris,
   verify_ppe; load test via Locust.

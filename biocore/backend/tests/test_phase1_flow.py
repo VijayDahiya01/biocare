@@ -6,7 +6,6 @@ import uuid
 from urllib.parse import parse_qs, urlparse
 
 import httpx
-import pyotp
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -27,10 +26,6 @@ def _csrf(c: TestClient) -> dict:
     return {"X-CSRF-Token": c.cookies.get("csrf")}
 
 
-def _totp(uri: str) -> str:
-    return pyotp.TOTP(parse_qs(urlparse(uri).query)["secret"][0]).now()
-
-
 def _provision(client) -> tuple[str, str, str]:
     org = f"P1-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@x.com"
@@ -39,7 +34,7 @@ def _provision(client) -> tuple[str, str, str]:
         "admin_email": email, "admin_password": "supersecret123",
     })
     assert r.status_code == 201, r.text
-    return org, email, r.json()["data"]["totp_provisioning_uri"]
+    return org, email, ""
 
 
 @respx.mock
@@ -92,7 +87,7 @@ def test_full_attendance_mvp(client):
     # --- admin registers a kiosk device ---
     admin = TestClient(client.app)
     admin.post("/api/v1/auth/login", json={
-        "email": admin_email, "password": "supersecret123", "totp_code": _totp(admin_uri),
+        "email": admin_email, "password": "supersecret123",
     })
     r = admin.post("/api/v1/devices", headers=_csrf(admin), json={"name": "KIOSK-GATE-01"})
     assert r.status_code == 201, r.text
@@ -134,7 +129,7 @@ def test_spoof_is_rejected_at_kiosk(client):
     org, admin_email, admin_uri = _provision(client)
     admin = TestClient(client.app)
     admin.post("/api/v1/auth/login", json={
-        "email": admin_email, "password": "supersecret123", "totp_code": _totp(admin_uri),
+        "email": admin_email, "password": "supersecret123",
     })
     r = admin.post("/api/v1/devices", headers=_csrf(admin), json={"name": "K2"})
     device_token = r.json()["data"]["pairing_token"]

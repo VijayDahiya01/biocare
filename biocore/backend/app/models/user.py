@@ -38,7 +38,6 @@ class User(Base):
 
     # Admin/staff credentials (members use email+OTP, so these stay null for them).
     password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
-    totp_secret: Mapped[str | None] = mapped_column(String, nullable=True)
 
     created_at: Mapped[datetime] = created_at_col()
     deleted_at: Mapped[datetime | None] = mapped_column(

@@ -88,9 +88,6 @@ BACKUP_DATABASE_URL='postgresql://postgres:***@host:5432/biocore_restore' \
    { "name": "Acme School", "org_code": "ACME-2026", "vertical": "school",
      "admin_email": "principal@acme.com", "admin_password": "•••" }
    ```
-   Returns the entity admin's TOTP provisioning URI — give it to them to add to an
-   authenticator app. (Locally, `python -m scripts.seed_demo` creates a demo tenant
-   and prints a current 2FA code.)
 2. The entity admin signs in at `/admin/login`, sets branding/DPDP/threshold under
    **Settings**, creates **Zones/Badges/Devices**, then opens self-registration via
    the org code (members register at `/register`).
@@ -134,7 +131,7 @@ BACKUP_DATABASE_URL='postgresql://postgres:***@host:5432/biocore_restore' \
 ---
 
 ## 9. Security & compliance checklist (before go-live)
-- TLS 1.3 only; `COOKIE_SECURE=true`; admin TOTP enforced.
+- TLS 1.3 only; `COOKIE_SECURE=true`.
 - App DB role is **non-superuser** (RLS enforced); secrets in a manager, not git.
 - Independent **penetration test** (zero critical/high) and **DPDP/security review**.
 - **Load test** at peak × 2 concurrent kiosk scans.

@@ -6,7 +6,6 @@ Also exercises the tenant-isolation safety net. Requires the stack (Postgres+Red
 import uuid
 from urllib.parse import parse_qs, urlparse
 
-import pyotp
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,9 +16,6 @@ def app_client(require_stack):
     return TestClient(app)
 
 
-def _totp_from_uri(provisioning_uri: str) -> str:
-    secret = parse_qs(urlparse(provisioning_uri).query)["secret"][0]
-    return pyotp.TOTP(secret).now()
 
 
 def test_provision_login_and_session(app_client):
@@ -35,11 +31,10 @@ def test_provision_login_and_session(app_client):
     body = r.json()
     assert body["success"] is True
     assert body["request_id"].startswith("req_")
-    prov_uri = body["data"]["totp_provisioning_uri"]
 
-    # 2. login with email + password + TOTP -> session cookie
+    # 2. login with email + password -> session cookie
     r = app_client.post("/api/v1/auth/login", json={
-        "email": email, "password": "supersecret123", "totp_code": _totp_from_uri(prov_uri),
+        "email": email, "password": "supersecret123",
     })
     assert r.status_code == 200, r.text
     assert "session" in r.cookies
@@ -51,24 +46,10 @@ def test_provision_login_and_session(app_client):
     assert r.json()["data"]["role"] == "entity_admin"
 
 
-def test_admin_login_requires_totp(app_client):
-    org = f"TEST-{uuid.uuid4().hex[:8]}"
-    email = f"admin_{uuid.uuid4().hex[:8]}@example.com"
-    app_client.post("/api/v1/admin/tenants", json={
-        "name": "Org", "org_code": org, "vertical": "office",
-        "admin_email": email, "admin_password": "supersecret123",
-    })
-    # no TOTP -> rejected
-    r = app_client.post("/api/v1/auth/login", json={
-        "email": email, "password": "supersecret123",
-    })
-    assert r.status_code == 401
-    assert r.json()["error"]["code"] == "TOTP_REQUIRED"
-
 
 def test_wrong_password_is_401(app_client):
     r = app_client.post("/api/v1/auth/login", json={
-        "email": "nobody@example.com", "password": "wrong", "totp_code": "000000",
+        "email": "nobody@example.com", "password": "wrong",
     })
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "INVALID_CREDENTIALS"

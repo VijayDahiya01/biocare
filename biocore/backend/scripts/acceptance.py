@@ -33,17 +33,11 @@ def info(crit: str, detail: str) -> None:
 def _admin(tc: TestClient):
     org = f"AC-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-    from urllib.parse import parse_qs, urlparse
-
-    import pyotp
-    r = tc.post("/api/v1/admin/tenants", json={"name": "Acc", "org_code": org, "vertical": "office",
-                                               "admin_email": email, "admin_password": "supersecret123"})
-    uri = r.json()["data"]["totp_provisioning_uri"]
-    secret = parse_qs(urlparse(uri).query)["secret"][0]
-    tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123",
-                                        "totp_code": pyotp.TOTP(secret).now()})
+    tc.post("/api/v1/admin/tenants", json={"name": "Acc", "org_code": org, "vertical": "office",
+                                           "admin_email": email, "admin_password": "supersecret123"})
+    tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
     tc.headers.update({"X-CSRF-Token": tc.cookies.get("csrf")})
-    return org, email, secret
+    return org, email
 
 
 def main() -> None:
@@ -147,16 +141,13 @@ def main() -> None:
     print("\n2.5 Security")
     # fresh client to inspect login cookies
     s = TestClient(app)
-    import pyotp
-    rl = s.post("/api/v1/auth/login", json={"email": adminA_email, "password": "supersecret123",
-                                            "totp_code": pyotp.TOTP(adminA_secret).now()})
+    rl = s.post("/api/v1/auth/login", json={"email": adminA_email, "password": "supersecret123"})
     setc = " ".join(rl.headers.get_list("set-cookie")).lower()
     check("session cookie HttpOnly + SameSite", "httponly" in setc and "samesite=strict" in setc)
     info("session cookie Secure", "enabled in prod via COOKIE_SECURE=true (off for local http)")
     r = a.post("/api/v1/devices", headers={"X-CSRF-Token": "wrong"}, json={"name": "x"})
     check("mutation with bad CSRF rejected (403)", r.status_code == 403 and r.json()["error"]["code"] == "CSRF_FAILED")
     r = s.post("/api/v1/auth/login", json={"email": adminA_email, "password": "supersecret123"})
-    check("admin login requires TOTP", r.status_code == 401 and r.json()["error"]["code"] == "TOTP_REQUIRED")
     info("TLS 1.3 / HTTP refused", "enforced by the nginx gateway / K8s ingress (not exercisable on local http)")
 
     # summary

@@ -1,10 +1,10 @@
 """REAL product journey - no fakes in the face path.
 
-  organisation onboards -> admin signs in with 2FA -> invites a person by email
+  organisation onboards -> admin signs in -> invites a person by email
   -> person signs in with a real emailed OTP -> accepts the invite -> consents
   -> captures their face -> walks up to the gate -> recognised -> checks in -> checks out
 
-Real Postgres (clean db), real Redis, real TOTP, real InsightFace engine (SCRFD + ArcFace
+Real Postgres (clean db), real Redis, real InsightFace engine (SCRFD + ArcFace
 512-d). The faces are two genuinely different people, and the gate photo is a DIFFERENT
 capture of the enrolled person - so a match can only come from real recognition.
 """
@@ -12,10 +12,8 @@ import io
 import os
 import sys
 import uuid
-from urllib.parse import parse_qs, urlparse
 
 import httpx
-import pyotp
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080/api/v1"
 FACES = os.path.dirname(os.path.abspath(__file__)) + "/testfaces"
@@ -75,25 +73,12 @@ if r.status_code not in (200, 201):
     print(r.text[:400])
     sys.exit(1)
 d = r.json()["data"]
-uri = d.get("totp_provisioning_uri") or d.get("totp_uri") or ""
-secret = (parse_qs(urlparse(uri).query).get("secret", [None])[0]
-          if uri else d.get("totp_secret"))
-step("2FA secret issued to the admin", bool(secret), "scan this into an authenticator app")
 print(f"        org_code={org_code}  admin={admin_email}")
 
-TOTP_OFF = os.environ.get("DEMO_DISABLE_TOTP", "false").lower() in ("1", "true", "yes")
 
 print("\n=== STEP 2. The admin signs in ===")
 r = admin.post("/auth/login", json={"email": admin_email, "password": ADMIN_PW})
-if TOTP_OFF:
-    # DEMO_DISABLE_TOTP is on, so the second factor is deliberately not required.
-    step("login with password alone succeeds (2FA disabled)", r.status_code == 200,
-         f"HTTP {r.status_code}")
-else:
-    step("login WITHOUT 2FA is refused", r.status_code == 401, f"HTTP {r.status_code}")
-    r = admin.post("/auth/login", json={"email": admin_email, "password": ADMIN_PW,
-                                        "totp_code": pyotp.TOTP(secret).now()})
-    step("login WITH 2FA succeeds", r.status_code == 200, f"HTTP {r.status_code}")
+step("admin signed in with password", r.status_code == 200, f"HTTP {r.status_code}")
 
 # On a throwaway client, so a rejected login cannot disturb the session just established.
 with httpx.Client(base_url=BASE, timeout=60.0) as probe:

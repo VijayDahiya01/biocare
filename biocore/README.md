@@ -17,10 +17,10 @@ verticals by configuration. DPDP Act 2026 compliance is enforced by the system i
 
 ### Phase 0 — Foundation ✅
 - **Full stack `docker-compose.yml`** — gateway, frontend, api, zepiris-main, zepiris-ml, postgres, milvus (+etcd), minio, redis, rabbitmq.
-- **Backend core** — settings from env, SQLAlchemy + Redis clients, Argon2 passwords, TOTP, request-id middleware, standard response envelope.
+- **Backend core** — settings from env, SQLAlchemy + Redis clients, Argon2 passwords, request-id middleware, standard response envelope.
 - **Core schema + migration** — `tenants, roles, users, consent_records, audit_logs` with **Row-Level Security (FORCE)** as the isolation safety net, an **append-only audit trigger**, and the **12 role presets** seeded.
 - **ZepIris adapter** — the keystone. Base64→multipart, `tenant` form field, camelCase `requestId`, search-returns-200-on-bad-image — all per the verified spec. Fully unit-tested.
-- **Auth** — Redis-backed sessions as HttpOnly cookies, CSRF tokens, admin login with mandatory TOTP, tenant provisioning, audit logging on every action.
+- **Auth** — Redis-backed sessions as HttpOnly cookies, CSRF tokens, admin login, tenant provisioning, audit logging on every action.
 
 ### Phase 1 — Core attendance MVP ✅ (backend)
 - **Self-registration flow** — `POST /register` → email OTP (`/auth/otp/request|verify`) → `POST /consent` (4 mandatory acks) → `POST /faces/enroll` (consent-gated; raw image not retained). Pending accounts cannot check in until face capture completes.
@@ -33,7 +33,7 @@ verticals by configuration. DPDP Act 2026 compliance is enforced by the system i
   - *Kiosk* `/kiosk` — continuous webcam capture, device-token auth, all 7 result states, auto-reset.
   - *Registration* `/register` → `/register/verify` (OTP) → `/enroll` (consent gate + face capture) → `/enroll/done`.
   - *Member* `/me/login` (OTP) + `/me` (my attendance).
-  - *Admin* `/admin/login` (+TOTP), `/admin/dashboard` (live metrics + feed, 10s poll), `/admin/attendance` (filters+paging), `/admin/users`, `/admin/devices` (register + one-time pairing token).
+  - *Admin* `/admin/login`, `/admin/dashboard` (live metrics + feed, 10s poll), `/admin/attendance` (filters+paging), `/admin/users`, `/admin/devices` (register + one-time pairing token).
   - Cookie-based API client with automatic CSRF header; `getUserMedia`→canvas→base64 capture hook.
 
 > Phase 1 is complete end-to-end for Office / Gym / basic School & Factory attendance.
@@ -116,7 +116,7 @@ python -m venv .venv && . .venv/Scripts/activate    # Windows; or: source .venv/
 pip install -r requirements.txt
 cp .env.dev .env                 # dev config: FAKE_ZEPIRIS=true, COOKIE_SECURE=false
 alembic upgrade head             # create tables + RLS + seed the 12 role presets
-python -m scripts.seed_demo      # create a demo tenant + admin, prints a 2FA code
+python -m scripts.seed_demo      # create a demo tenant + admin
 uvicorn app.main:app --port 8080 --reload
 ```
 
@@ -128,7 +128,7 @@ npm run dev                      # proxies /api -> http://localhost:8080
 ```
 
 **4. Click through it** at `http://localhost:3000`:
-- **Admin** → `/admin/login` with the demo creds + 2FA code from `seed_demo`.
+- **Admin** → `/admin/login` with the demo creds code from `seed_demo`.
 - **Register a member** → `/register` (org code `DEMO-2026`) → the OTP is printed in
   the **backend terminal** (email is a dev stub) → verify → consent → capture face.
 - **Register a kiosk** → admin `Devices` → copy the kiosk link → open `/kiosk?token=…`
@@ -136,7 +136,7 @@ npm run dev                      # proxies /api -> http://localhost:8080
 - Explore zones/badges, admin-assisted enroll, alerts, audit, HR/payroll, leave,
   reports, DPDP export/erasure, etc.
 
-Re-run `python -m scripts.seed_demo` any time to reprint a fresh 2FA code.
+Re-run `python -m scripts.seed_demo` any time to reprint the demo credentials.
 
 ## Production readiness (remaining, infra/data-dependent)
 - Bring up the stack (Docker) and run the **10 integration tests** + a live **ZepIris** round-trip.
@@ -201,7 +201,7 @@ The definition of done for Phase 0 (ROADMAP §4):
 2. **Register a tenant → create an admin → log in; the session cookie works.**
    Demonstrated by `tests/test_phase0_gate.py`, or manually:
    ```bash
-   # provision a tenant + entity admin (returns a TOTP provisioning URI)
+   # provision a tenant + entity admin
    curl -k -X POST https://localhost/api/v1/admin/tenants \
      -H 'Content-Type: application/json' \
      -d '{"name":"Acme","org_code":"ACME-2026","vertical":"office",
@@ -210,7 +210,7 @@ The definition of done for Phase 0 (ROADMAP §4):
    # add the secret to an authenticator, then log in with the 6-digit code
    curl -k -X POST https://localhost/api/v1/auth/login \
      -H 'Content-Type: application/json' -c cookies.txt \
-     -d '{"email":"admin@acme.com","password":"supersecret123","totp_code":"123456"}'
+     -d '{"email":"admin@acme.com","password":"supersecret123"}'
 
    # the session cookie now authorises /auth/me
    curl -k https://localhost/api/v1/auth/me -b cookies.txt
@@ -227,7 +227,7 @@ The definition of done for Phase 0 (ROADMAP §4):
 
 Tenant isolation (app + RLS) · consent-before-capture · raw-image deletion ·
 verified erasure cascade · immutable audit · TLS 1.3 / HttpOnly+SameSite cookies /
-CSRF / admin TOTP · India data localisation. See ROADMAP §1.
+CSRF · India data localisation. See ROADMAP §1.
 
 ## Layout
 

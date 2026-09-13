@@ -1,7 +1,7 @@
 """Production safety guards — refuse to boot in an unsafe configuration.
 
 Individual dev shortcuts are already blocked at their point of use (fake engines, fake gov
-provider, SoftwareKms, the TOTP bypass). Those fire lazily, which means the first person to
+provider, SoftwareKms). Those fire lazily, which means the first person to
 discover a misconfiguration is whoever is standing at a gate. This checks the whole
 configuration once, at startup, and refuses to start rather than serving a broken promise.
 
@@ -36,10 +36,6 @@ def production_problems() -> list[str]:
             problems.append(f"{name}=true — a stand-in is answering instead of the real service. "
                             f"Set {name}=false.")
 
-    if settings.demo_disable_totp:
-        problems.append(
-            "DEMO_DISABLE_TOTP=true — admin accounts would sign in on a password alone. An admin "
-            "can enrol people, pair gates and read the audit trail. Set DEMO_DISABLE_TOTP=false.")
 
     if not settings.cookie_secure:
         problems.append(

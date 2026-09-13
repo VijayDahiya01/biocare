@@ -34,7 +34,6 @@ pip-audit -r requirements.txt          # dependency CVEs
 | HttpOnly + Secure + SameSite=Strict session cookie | `app/core/sessions.py` |
 | CSRF token on all mutations | `app/api/deps.py:enforce_csrf` |
 | Argon2 password hashing | `app/core/security.py` |
-| Mandatory TOTP 2FA for admin roles | `app/services/auth_service.py` |
 | Tenant isolation: app filter **+ Postgres FORCE RLS** | `app/core/db.py`, migrations |
 | App connects as a **non-superuser** (RLS not bypassable) | deploy config / CI |
 | Immutable audit log (append-only trigger) | migration `0001` |
@@ -45,7 +44,7 @@ pip-audit -r requirements.txt          # dependency CVEs
 
 ## Penetration-test plan (engage an external firm before go-live)
 Test at minimum:
-- **AuthN/Z:** session fixation, CSRF bypass, TOTP brute-force/replay, role escalation.
+- **AuthN/Z:** session fixation, CSRF bypass, credential stuffing, role escalation.
 - **Tenant isolation / IDOR:** attempt cross-tenant reads/writes by forging ids,
   cookies, and `tenant_id`; confirm 404 + RLS (deliberately remove an app filter in a
   staging build and confirm RLS still blocks).

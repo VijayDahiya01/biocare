@@ -6,7 +6,6 @@
 import uuid
 from urllib.parse import parse_qs, urlparse
 
-import pyotp
 from fastapi.testclient import TestClient
 
 from app.core.redis_client import client as redis
@@ -27,12 +26,9 @@ def main():
     office = TestClient(app)
     org = f"OFF-{uuid.uuid4().hex[:8]}"
     aemail = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-    uri = office.post("/api/v1/admin/tenants", json={"name": "Office Co", "org_code": org,
           "vertical": "office", "admin_email": aemail, "admin_password": "supersecret123"}
-          ).json()["data"]["totp_provisioning_uri"]
     sec = parse_qs(urlparse(uri).query)["secret"][0]
-    office.post("/api/v1/auth/login", json={"email": aemail, "password": "supersecret123",
-                "totp_code": pyotp.TOTP(sec).now()})
+    office.post("/api/v1/auth/login", json={"email": aemail, "password": "supersecret123"})
     office.headers.update({"X-CSRF-Token": office.cookies.get("csrf")})
     dev = office.post("/api/v1/devices", json={"name": "OFF-KIOSK"}).json()["data"]
 

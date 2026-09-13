@@ -10,15 +10,12 @@ are demo credentials and a dev device token; do not use in production.
 | App base (this PC) | http://localhost:3001 |
 | Backend API | http://localhost:8080/api/v1 (health: `/health`) |
 | Org code (to join) | **DEMO-2026** (tenant "Demo Co") |
-| Admin login | **admin@acme.com** / **demopass123** + 2FA |
-| Admin 2FA secret | `3F2G73ET5PHVZ74RQLZQZSCOW67GOKKP` (add to Google Authenticator/Authy) |
+| Admin login | **admin@acme.com** / **demopass123** |
 | Guardian (pickup test) | parent@acme.com |
 | **Device token** (kiosk/guard) | `dev_Zl9lWXQGyk-ObzvbkUDwiVRUTW8xYm8jDofCCtJDi38` |
 | Kiosk URL (pre-paired) | http://localhost:3001/kiosk?token=dev_Zl9lWXQGyk-ObzvbkUDwiVRUTW8xYm8jDofCCtJDi38 |
 | Guard URL (pre-paired) | http://localhost:3001/guard?token=dev_Zl9lWXQGyk-ObzvbkUDwiVRUTW8xYm8jDofCCtJDi38 |
 
-> **2FA note:** codes rotate every 30s. Add the secret/otpauth to an authenticator app
-> once, or run `python scripts/seed_demo.py` (prints a fresh code), or ask Claude for one.
 
 > **Camera note:** browsers only allow the webcam on `localhost` or `https`. Test all
 > camera screens on **this PC via localhost** (not the phone-over-LAN URL).
@@ -59,14 +56,14 @@ for that tenant, with a 0.99 score; quality always passes, never a spoof. So:
    circle**, dashed ring → **turns violet when MediaPipe detects your face**. ✅
 2. **Scan:** a face fills the circle → scans → **Welcome / Goodbye** (violet), or
    **Access denied** (red) / **Not recognised** (grey + Enroll visitor). ✅
-3. **Guard sign in** (top-right): **admin@acme.com / demopass123 / <2FA>** → panel appears. ✅
+3. **Guard sign in** (top-right): **admin@acme.com / demopass123** → panel appears. ✅
 4. **Enroll** tab: name + tick 4 confirmations → **Capture & enroll** a walk-in visitor.
    Now switch to the scan view and look → **Welcome, <that visitor>** (most-recent match). ✅
 5. **Alerts** tab: live list + dismiss. **Inside** tab: headcount + **Emergency muster**. ✅
 6. **Pickup** tab (school): enter a student id + scan guardian → AUTHORISED / NOT. *(advanced)*
 
 ## Test 4 — Admin portal 🧭  `/admin`
-1. Open **http://localhost:3001/admin/login** → **admin@acme.com / demopass123 / <2FA>**.
+1. Open **http://localhost:3001/admin/login** → **admin@acme.com / demopass123**.
 2. **Dashboard** → live metrics. **Attendance** → the events from your kiosk/guard scans. ✅
 3. **Devices** → see "Demo Terminal (test)"; create another (copy its token → `/kiosk?token=…`). ✅
 4. **Users** → the demo users; open one → edit / **erase (DPDP cascade)**. ✅
@@ -78,13 +75,13 @@ for that tenant, with a 0.99 score; quality always passes, never a spoof. So:
 ---
 
 ## Quick happy-path (fastest end-to-end, ~2 min)
-1. `/guard?token=…` → **Guard sign in** (admin + 2FA) → **Enroll** tab → enroll yourself
+1. `/guard?token=…` → **Guard sign in** (admin) → **Enroll** tab → enroll yourself
    as a visitor (capture your face).
 2. Switch to the scan view → look at the camera → **Welcome, <you>**.
 3. `/admin` → **Attendance** → see the check-in event. → **Audit** → see the trail.
 
 ## Reset / re-seed (if needed)
-- Re-print admin creds + fresh 2FA: `cd biocore/backend && .venv/Scripts/python scripts/seed_demo.py`
+- Re-print admin creds: `cd biocore/backend && .venv/Scripts/python scripts/seed_demo.py`
 - Backend restart clears the in-memory face store → re-enroll before scanning.
 - Need a new device token: Admin → Devices → create (or ask Claude to mint one).
 

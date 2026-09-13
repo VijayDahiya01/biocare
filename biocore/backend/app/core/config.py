@@ -137,9 +137,6 @@ class Settings(BaseSettings):
     session_ttl_member_seconds: int = 14400
     cookie_secure: bool = True
     cookie_domain: str = ""
-    # DEMO ONLY: skip the admin 2FA/TOTP step so a demo login is frictionless. Hard-blocked in
-    # production (see authenticate()) — never trust this to weaken a real deployment.
-    demo_disable_totp: bool = False
 
     @property
     def is_production(self) -> bool:

@@ -18,8 +18,6 @@ if os.environ.get("BIOCORE_TEST_USE_REAL_ENV") != "1":
         "FAKE_REDIS": "true",
         "FAKE_GOV_IDENTITY": "true",
         "ENVIRONMENT": "development",
-        # NOTE: DEMO_DISABLE_TOTP is deliberately NOT forced here — see
-        # test_phase0_gate::test_admin_login_requires_totp.
     })
 
 import pytest

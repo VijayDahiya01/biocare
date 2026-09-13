@@ -278,7 +278,7 @@ Your working product is your best slide. Suggested flow:
   anti-spoof + **on-device face detection (MediaPipe)** to gate scanning
 - **Infra:** object storage (MinIO), Redis sessions, RabbitMQ, monitoring, backups,
   Kubernetes, CI; load-tested at 0% error
-- **Security:** Argon2, TOTP 2FA for admins, OTP for members, CSRF, append-only audit
+- **Security:** Argon2 passwords, OTP for members, CSRF, append-only audit
 
 ## A3 — DPDP / privacy detail
 - Consent recorded **before** capture, per purpose & per place; withdrawable

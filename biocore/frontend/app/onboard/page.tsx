@@ -1,6 +1,6 @@
 "use client";
 // O1 — Company onboarding. A company owner provisions their tenant + first
-// entity_admin (POST /admin/tenants), then gets their org code + 2FA secret.
+// entity_admin (POST /admin/tenants), then gets their org code.
 import { useState } from "react";
 import { ApiError, api } from "../../lib/api";
 
@@ -20,7 +20,6 @@ type Provisioned = {
   org_code: string;
   admin_user_id: string;
   admin_email: string;
-  totp_provisioning_uri: string;
 };
 
 function suggestOrgCode(name: string): string {
@@ -83,13 +82,12 @@ export default function Onboard() {
   }
 
   if (done) {
-    const secret = new URLSearchParams(done.totp_provisioning_uri.split("?")[1] || "").get("secret") || "";
     return (
       <div className="center">
         <div className="card" style={{ width: "100%", maxWidth: 560 }}>
           <span className="badge green" style={{ marginBottom: 10 }}>Company created</span>
           <h1>{form.name.trim()} is live on BioCore</h1>
-          <p className="muted">Two things to keep before you sign in — your org code and your 2FA secret.</p>
+          <p className="muted">Keep your org code — it is how your people join.</p>
 
           <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
             <div className="stack">
@@ -102,26 +100,12 @@ export default function Onboard() {
               </div>
             </div>
 
-            <div className="stack">
-              <label style={{ margin: 0 }}>Admin 2FA secret — add it to your authenticator app now</label>
-              <div className="copyrow">
-                <code className="big">{secret}</code>
-                <button type="button" className="secondary" onClick={() => copy("2fa", secret)}>
-                  {copied === "2fa" ? "Copied" : "Copy"}
-                </button>
-              </div>
-              <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-                Open Google Authenticator (or similar) → add a manual key → paste this secret. You'll need the
-                6-digit code to sign in. Full setup link:{" "}
-                <code style={{ fontSize: 11, wordBreak: "break-all" }}>{done.totp_provisioning_uri}</code>
-              </p>
-            </div>
           </div>
 
           <div style={{ marginTop: 20, display: "grid", gap: 8 }}>
             <a href="/admin/login"><button style={{ width: "100%" }}>Continue to admin sign-in</button></a>
             <p className="muted" style={{ fontSize: 12, textAlign: "center", margin: 0 }}>
-              Sign in as <b>{done.admin_email}</b> with your password + a 2FA code.
+              Sign in as <b>{done.admin_email}</b> with your password.
             </p>
           </div>
 

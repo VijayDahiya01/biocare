@@ -41,7 +41,7 @@ Reuse the platform's **dark, high-contrast** look (cyan→blue gradient accents)
 - **Terminal pairing (device token):** the scan/break/pickup calls authenticate with
   an `X-Device-Token` header (set when the terminal is paired to a zone). No login for scanning.
 - **Guard sign-in (session):** the guard logs in (Security/Reception role; email +
-  password + **2FA**) to unlock the operations panel; their actions are audited.
+  password) to unlock the operations panel; their actions are audited.
   Design a **"Guard sign in"** affordance and a **locked/unattended** state.
 
 ## 6. Layout map
@@ -122,7 +122,7 @@ For when a face won't scan. **API:** `POST /attendance/manual` body `{ user_id, 
 - **Guard panel tabs** (Alerts / Inside / Enroll / Manual / Pickup) with count badges; slide-over on small screens.
 - **Alert row** (priority color, message, time, dismiss).
 - **Confirmation toggles** (consent) + capture button (reuse the camera component).
-- **Lock / unattended** overlay + **Guard sign-in** modal (email + password + 2FA).
+- **Lock / unattended** overlay + **Guard sign-in** modal (email + password).
 
 ## 9. Data dictionary
 - `event`: `check_in` · `check_out` · `break_start` · `break_end`.
@@ -155,6 +155,6 @@ For when a face won't scan. **API:** `POST /attendance/manual` body `{ user_id, 
 | Who's inside | GET /attendance/presence · POST /emergency/trigger | guard session |
 | Enroll visitor | POST /admin/enroll (or /visitors/invite) | guard session |
 | Manual | POST /attendance/manual *(add security_reception role)* | guard session |
-| Guard login | POST /auth/login (email+password+TOTP) | — |
+| Guard login | POST /auth/login (email+password) | — |
 
 *Live schemas: `/api/v1/docs`.*

@@ -8,7 +8,6 @@ import uuid
 from urllib.parse import parse_qs, urlparse
 
 import httpx
-import pyotp
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -28,9 +27,7 @@ def admin(require_stack):
     r = tc.post("/api/v1/admin/tenants", json={
         "name": "P3", "org_code": org, "vertical": "office",
         "admin_email": email, "admin_password": "supersecret123"})
-    secret = parse_qs(urlparse(r.json()["data"]["totp_provisioning_uri"]).query)["secret"][0]
-    tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123",
-                                        "totp_code": pyotp.TOTP(secret).now()})
+    tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
     tc.headers.update({"X-CSRF-Token": tc.cookies.get("csrf")})
     return tc, org
 

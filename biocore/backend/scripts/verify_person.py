@@ -6,7 +6,6 @@ sector -> cross-person isolation. In-process (real Postgres, fake Redis for OTP)
 import uuid
 from urllib.parse import parse_qs, urlparse
 
-import pyotp
 from fastapi.testclient import TestClient
 
 from app.core.redis_client import client as redis
@@ -25,12 +24,9 @@ def make_business(vertical: str):
     tc = TestClient(app)
     org = f"{vertical[:3].upper()}-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-    uri = tc.post("/api/v1/admin/tenants", json={"name": f"{vertical.title()} Co", "org_code": org,
                   "vertical": vertical, "admin_email": email, "admin_password": "supersecret123"}
-                  ).json()["data"]["totp_provisioning_uri"]
     secret = parse_qs(urlparse(uri).query)["secret"][0]
-    tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123",
-                                        "totp_code": pyotp.TOTP(secret).now()})
+    tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
     tc.headers.update({"X-CSRF-Token": tc.cookies.get("csrf")})
     return tc, org
 

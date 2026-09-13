@@ -49,7 +49,7 @@ data/models, or a third party; everything else is in this repo.
 - [ ] Close the staged **starlette/FastAPI dependency upgrade** (see `docs/SECURITY.md`).
 
 ## 6. Onboard the first tenant
-- [ ] `POST /api/v1/admin/tenants` (super-admin) → hand the entity admin their TOTP secret.
+- [ ] `POST /api/v1/admin/tenants` (super-admin) → hand the entity admin their org code.
 - [ ] Admin sets branding/DPDP/threshold, creates zones/badges/devices, opens self-registration.
 - [ ] Smoke the live kiosk: register a member → enroll → check in/out → see it on the dashboard.
 

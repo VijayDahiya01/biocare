@@ -1,9 +1,8 @@
-"""Password hashing, TOTP, and token generation."""
+"""Password hashing and token generation."""
 import hmac
 import secrets
 from hashlib import sha256
 
-import pyotp
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
@@ -24,20 +23,6 @@ def verify_password(password: str, hashed: str) -> bool:
 def needs_rehash(hashed: str) -> bool:
     return _ph.check_needs_rehash(hashed)
 
-
-# --- TOTP (mandatory 2FA for admin roles) ---
-def new_totp_secret() -> str:
-    return pyotp.random_base32()
-
-
-def verify_totp(secret: str, code: str) -> bool:
-    if not secret or not code:
-        return False
-    return pyotp.TOTP(secret).verify(code, valid_window=1)
-
-
-def totp_provisioning_uri(secret: str, email: str, issuer: str = "BioCore") -> str:
-    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=issuer)
 
 
 # --- tokens ---

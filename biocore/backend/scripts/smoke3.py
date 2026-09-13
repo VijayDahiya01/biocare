@@ -1,21 +1,9 @@
 """Smoke for PDF generation (erasure cert, 80G receipt) against the live server."""
 import httpx
-import pyotp
-from sqlalchemy import select
-
-from app.core.db import SessionLocal, bypass_rls
-from app.models import User
 
 BASE = "http://127.0.0.1:8080/api/v1"
 IMG = "data:image/jpeg;base64,Zm9vYmFy"
 
-
-def admin_totp() -> str:
-    d = SessionLocal()
-    with bypass_rls(d):
-        u = d.execute(select(User).where(User.email == "admin@acme.com")).scalar_one()
-    d.close()
-    return pyotp.TOTP(u.totp_secret).now()
 
 
 def is_pdf(c: httpx.Client, url: str) -> tuple[bool, int, str]:
@@ -24,7 +12,7 @@ def is_pdf(c: httpx.Client, url: str) -> tuple[bool, int, str]:
 
 
 c = httpx.Client(base_url=BASE, timeout=10)
-c.post("/auth/login", json={"email": "admin@acme.com", "password": "demopass123", "totp_code": admin_totp()})
+c.post("/auth/login", json={"email": "admin@acme.com", "password": "demopass123"})
 csrf = {"X-CSRF-Token": c.cookies.get("csrf")}
 
 # --- donation -> 80G receipt PDF ---

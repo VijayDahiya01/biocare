@@ -15,7 +15,6 @@ import time
 import uuid
 from urllib.parse import parse_qs, urlparse
 
-import pyotp
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -166,9 +165,8 @@ def test_session_required_and_csrf_enforced(app_client):
     r = app_client.post("/api/v1/admin/tenants", json={
         "name": "Org", "org_code": org, "vertical": "office",
         "admin_email": email, "admin_password": "supersecret123", "admin_name": "A"})
-    secret = parse_qs(urlparse(r.json()["data"]["totp_provisioning_uri"]).query)["secret"][0]
     app_client.post("/api/v1/auth/login", json={
-        "email": email, "password": "supersecret123", "totp_code": pyotp.TOTP(secret).now()})
+        "email": email, "password": "supersecret123"})
     # authenticated but no X-CSRF-Token on a mutating call -> 403
     r = app_client.post("/api/v1/retention/sweep")
     assert r.status_code == 403 and r.json()["error"]["code"] == "CSRF_FAILED"

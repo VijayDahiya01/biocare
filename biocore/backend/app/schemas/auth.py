@@ -4,7 +4,6 @@ from pydantic import BaseModel, EmailStr, Field
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    totp_code: str | None = None  # required for admin roles
 
 
 class ProvisionTenantRequest(BaseModel):

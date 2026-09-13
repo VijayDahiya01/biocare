@@ -15,7 +15,6 @@ This replaces `TEST_RUNBOOK.md` for real testing — that one documents the demo
 | Database | **Real.** Clean cluster, `biocore_real`, zero demo data |
 | Redis (sessions, OTP) | **Real.** Redis 7.4.11 on `:6379` |
 | Admin password / session / CSRF | **Real** |
-| Admin 2FA | **OFF.** `DEMO_DISABLE_TOTP=true` — password alone signs you in. Set it to `false` to re-enable; secrets are still stored per admin, and `scripts/totp.py <email> --watch` prints a live code |
 | Face detect / embed / match | **Real.** InsightFace `buffalo_l` on CPU, local |
 | Passwords, CSRF, RLS, audit | **Real** |
 | Government KYC | **STUBBED** — `FAKE_GOV_IDENTITY=true`. Real calls are billed (see §6) |
@@ -99,9 +98,7 @@ curl -s -X POST http://127.0.0.1:8080/api/v1/admin/tenants \
        "admin_password":"Str0ng-Ops-Passw0rd!","admin_name":"Ops Manager"}'
 ```
 
-**Expect `201`.** A `totp_provisioning_uri` comes back and the secret is stored, but
-you do not need it while `DEMO_DISABLE_TOTP=true`.
-
+**Expect `201`.** The response carries the org code your people will join with.
 > Email domains must be ordinary. `.test`, `.invalid` and `.localhost` are rejected by the
 > email validator as reserved.
 
@@ -114,9 +111,6 @@ curl -s -c cookies.txt -X POST http://127.0.0.1:8080/api/v1/auth/login   -H "Con
 curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login -H "Content-Type: application/json"   -d '{"email":"ops@acmemfg.co.in","password":"wrong-password"}'
 ```
 
-**Expect `200` then `401`.** Password alone signs you in (`DEMO_DISABLE_TOTP=true`); passwords,
-sessions and CSRF are untouched. To put two-factor back, set `DEMO_DISABLE_TOTP=false` and
-restart — every admin already has a secret, and `scripts/totp.py <email> --watch` prints a
 live code.
 
 Every later admin call needs the session cookie **and** the CSRF header:
@@ -240,14 +234,14 @@ Camera only works on `localhost` or `https` — use this PC, not a phone over th
 
 | Screen | URL | Status |
 |---|---|---|
-| Admin | http://localhost:3001/admin/login | **Works.** Needs the 2FA code |
+| Admin | http://localhost:3001/admin/login | **Works** |
 | Person app | http://localhost:3001/member/login | **Works** |
 | Guard console | http://localhost:3001/guard?token=&lt;pairing_token&gt; | **Works** — walk-up, calls `/entry/identify` |
 | Kiosk | http://localhost:3001/kiosk?token=&lt;pairing_token&gt; | **Default mode BROKEN** (see below) |
 
 Browser run-through:
 
-1. `/admin/login` → sign in with 2FA → **Devices** → create a gate → copy its token.
+1. `/admin/login` → sign in  → **Devices** → create a gate → copy its token.
 2. **Users / Invites** → invite yourself by email.
 3. `/member/login` → request a code → read it from Redis (§3 step 5) → sign in.
 4. Accept the invite → consent → **capture your face with the webcam**.

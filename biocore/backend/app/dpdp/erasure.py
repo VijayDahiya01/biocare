@@ -86,7 +86,6 @@ def erase_user(db: Session, *, tenant_id: str, user_id: str) -> dict:
     user.member_id = None
     user.department = None
     user.password_hash = None
-    user.totp_secret = None
     user.extra = {}
     user.status = "erased"
     user.deleted_at = datetime.now(timezone.utc)

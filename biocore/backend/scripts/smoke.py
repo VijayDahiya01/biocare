@@ -5,32 +5,17 @@ attendance + presence. Run after the server is up:  python -m scripts.smoke
 import sys
 
 import httpx
-import pyotp
-from sqlalchemy import select
-
-from app.core.db import SessionLocal, bypass_rls
-from app.models import User
 
 BASE = "http://127.0.0.1:8080/api/v1"
 IMG = "data:image/jpeg;base64,Zm9vYmFy"  # fake engine ignores contents
 
 
-def admin_totp() -> str:
-    db = SessionLocal()
-    try:
-        with bypass_rls(db):
-            u = db.execute(select(User).where(User.email == "admin@acme.com")).scalar_one()
-        return pyotp.TOTP(u.totp_secret).now()
-    finally:
-        db.close()
-
 
 def main() -> None:
     c = httpx.Client(base_url=BASE, timeout=10)
 
-    # 1. admin login (email + password + TOTP)
-    r = c.post("/auth/login", json={"email": "admin@acme.com", "password": "demopass123",
-                                    "totp_code": admin_totp()})
+    # 1. admin login (email + password)
+    r = c.post("/auth/login", json={"email": "admin@acme.com", "password": "demopass123"})
     r.raise_for_status()
     print("1. login            ->", r.json()["data"]["role"])
     csrf = {"X-CSRF-Token": c.cookies.get("csrf")}

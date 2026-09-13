@@ -32,10 +32,8 @@ def get_csrf(request: Request, principal: Principal = Depends(get_principal)):
 @router.post("/login")
 def login(request: Request, response: Response, body: LoginRequest,
           db: Session = Depends(get_db)):
-    """Email + password (+ TOTP for admins). Issues a session cookie."""
-    claims = authenticate(
-        db, email=body.email, password=body.password, totp_code=body.totp_code
-    )
+    """Email + password. Issues a session cookie."""
+    claims = authenticate(db, email=body.email, password=body.password)
     session_id, csrf_token, ttl = create_session(
         claims["user_id"], claims["tenant_id"], claims["role"], claims.get("email")
     )

@@ -6,7 +6,6 @@ import uuid
 from urllib.parse import parse_qs, urlparse
 
 import httpx
-import pyotp
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -27,10 +26,6 @@ def _csrf(c: TestClient) -> dict:
     return {"X-CSRF-Token": c.cookies.get("csrf")}
 
 
-def _totp(uri: str) -> str:
-    return pyotp.TOTP(parse_qs(urlparse(uri).query)["secret"][0]).now()
-
-
 def _admin(client) -> tuple[TestClient, str]:
     org = f"P2-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@x.com"
@@ -38,9 +33,8 @@ def _admin(client) -> tuple[TestClient, str]:
         "name": "P2", "org_code": org, "vertical": "office",
         "admin_email": email, "admin_password": "supersecret123",
     })
-    uri = r.json()["data"]["totp_provisioning_uri"]
     c = TestClient(client.app)
-    c.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123", "totp_code": _totp(uri)})
+    c.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
     return c, org
 
 

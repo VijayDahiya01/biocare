@@ -185,7 +185,6 @@ COOKIE_SECURE=true
 
 # Every test shortcut OFF. The app refuses to start otherwise.
 DEV_LOGIN=false
-DEMO_DISABLE_TOTP=false
 FAKE_REDIS=false
 FAKE_ZEPIRIS=false
 FAKE_BIOVERIFY=false
@@ -263,7 +262,7 @@ Refusing to start: this configuration is not safe for production.
   2. SMTP_URL is unset — one-time codes are only written to the log...
 ```
 
-Fix what it lists and start again. It checks: dev login, every fake engine, the 2FA bypass,
+Fix what it lists and start again. It checks: dev login, every fake engine,
 insecure cookies, default secrets, a software KMS with no root key, missing email, and an engine
 selected without its address.
 
@@ -303,7 +302,6 @@ Expect `19 passed, 0 failed`. It will stop at the face capture unless the image 
 BioVerify's quality gate — that step is better done from a browser with a real webcam.
 
 Then create your first real organisation at `https://yourdomain.com/onboard` and **write down the
-2FA secret it shows you**. It is displayed once. `backend/scripts/totp.py` can recover a code from
 the database, but only if you can reach the database.
 
 ---

@@ -156,13 +156,13 @@ function SetupScreen({ onToken }: { onToken: (t: string) => void }) {
 
 // --- guard sign in ---
 function LoginScreen({ onIn }: { onIn: (g: Guard) => void }) {
-  const [f, setF] = useState({ email: "", password: "", totp_code: "" });
+  const [f, setF] = useState({ email: "", password: "" });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr(null); setBusy(true);
     try {
-      await api("/auth/login", { method: "POST", body: { email: f.email.trim(), password: f.password, totp_code: f.totp_code.trim() || null } });
+      await api("/auth/login", { method: "POST", body: { email: f.email.trim(), password: f.password } });
       const me = await api<{ role?: string; email?: string }>("/auth/me");
       onIn({ email: me.email || f.email, role: me.role || "" });
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Sign-in failed"); } finally { setBusy(false); }
@@ -172,7 +172,6 @@ function LoginScreen({ onIn }: { onIn: (g: Guard) => void }) {
       <h2 style={{ marginTop: 0 }}>Guard sign in</h2>
       <input className="gd-field" placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
       <input className="gd-field" type="password" placeholder="Password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
-      <input className="gd-field" placeholder="2FA code (if asked)" value={f.totp_code} onChange={(e) => setF({ ...f, totp_code: e.target.value })} />
       {err && <div className="gd-err">{err}</div>}
       <button className="gd-btn-wide" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
     </form></div></div>

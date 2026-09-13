@@ -1,25 +1,13 @@
 """Smoke for the newly-added features (grievance + guardian) against the live server."""
 import httpx
-import pyotp
-from sqlalchemy import select
-
-from app.core.db import SessionLocal, bypass_rls
-from app.models import User
 
 BASE = "http://127.0.0.1:8080/api/v1"
 IMG = "data:image/jpeg;base64,Zm9vYmFy"
 
 
-def totp() -> str:
-    d = SessionLocal()
-    with bypass_rls(d):
-        u = d.execute(select(User).where(User.email == "admin@acme.com")).scalar_one()
-    d.close()
-    return pyotp.TOTP(u.totp_secret).now()
-
 
 c = httpx.Client(base_url=BASE, timeout=10)
-c.post("/auth/login", json={"email": "admin@acme.com", "password": "demopass123", "totp_code": totp()})
+c.post("/auth/login", json={"email": "admin@acme.com", "password": "demopass123"})
 csrf = {"X-CSRF-Token": c.cookies.get("csrf")}
 
 # --- grievance (admin files one to exercise the endpoint, then resolves it) ---
