@@ -29,7 +29,7 @@ def _csrf(c: TestClient) -> dict:
 def _admin(client) -> tuple[TestClient, str]:
     org = f"P2-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@x.com"
-    r = client.post("/api/v1/admin/tenants", json={
+    client.post("/api/v1/admin/tenants", json={
         "name": "P2", "org_code": org, "vertical": "office",
         "admin_email": email, "admin_password": "supersecret123",
     })

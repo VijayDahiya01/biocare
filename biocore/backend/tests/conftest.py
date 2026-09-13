@@ -23,7 +23,6 @@ if os.environ.get("BIOCORE_TEST_USE_REAL_ENV") != "1":
 import pytest
 
 
-
 def _postgres_reachable() -> bool:
     try:
         from sqlalchemy import text

@@ -20,10 +20,10 @@ IMG = "data:image/jpeg;base64,Zm9vYmFy"
 
 
 def _admin(tc):
-    from urllib.parse import parse_qs, urlparse
     org = f"PPE-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-    secret = parse_qs(urlparse(uri).query)["secret"][0]
+    tc.post("/api/v1/admin/tenants", json={"name": "PPE", "org_code": org, "vertical": "factory",
+                                           "admin_email": email, "admin_password": "supersecret123"})
     tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
     tc.headers.update({"X-CSRF-Token": tc.cookies.get("csrf")})
 

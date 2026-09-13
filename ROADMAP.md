@@ -31,7 +31,7 @@ These are correctness gates, not features. If any break, the build is not done.
 3. **Data minimisation** — raw image deleted immediately after the 512-d vector is generated. Only vectors + references persist.
 4. **Erasure is complete** — one request hard-deletes across Milvus + MinIO + Postgres + Redis, each independently verified, then issues a certificate.
 5. **Audit everything** — every face search/enroll/delete writes an immutable audit row with a `request_id`. Audit log is append-only (no edit/delete via API).
-6. **Web security** — TLS 1.3 only; HttpOnly/Secure/SameSite=Strict cookies; CSRF on all mutations; Argon2/bcrypt passwords; TOTP 2FA mandatory for admins.
+6. **Web security** — TLS 1.3 only; HttpOnly/Secure/SameSite=Strict cookies; CSRF on all mutations; Argon2/bcrypt passwords.
 7. **India localisation** — all data stays in India (on-prem or India-region cloud).
 
 **Out of scope (do NOT build):** Bank KYC/RBI identity, airport boarding, military clearance, prison real-time tracking. These verticals can still use *staff attendance* only.
@@ -45,7 +45,7 @@ These are correctness gates, not features. If any break, the build is not done.
 | ZepIris access | **Single thin adapter** in the face-auth service | ZepIris uses multipart + `tenant` form field + camelCase `requestId`; the platform exposes clean base64 JSON + snake_case envelope. Isolate all divergence in one place. Build & test this FIRST. |
 | Milvus tenancy | **ONE collection `zepiris_faces`** with a `tenant` column | Per Doc 7 (verified). Earlier docs said per-tenant collections — **wrong**. Pass `tenant=<id>` on every insert/search/upsert/delete. |
 | Blacklist vectors | Searched in parallel on every kiosk scan | A hit raises an immediate `blacklist.hit` alert. |
-| Auth | Server-side sessions in Redis, delivered as HttpOnly cookies | NOT JWT-in-localStorage. Members: email+OTP. Admins: email+password+TOTP. Kiosks: long-lived device token cookie. |
+| Auth | Server-side sessions in Redis, delivered as HttpOnly cookies | NOT JWT-in-localStorage. Members: email+OTP. Admins: email+password. Kiosks: long-lived device token cookie. |
 | Response shape | Uniform envelope `{success, data, request_id}` / `{success, error{code,message}}` | Every endpoint. `request_id` doubles as the audit trace key. |
 | Search bad-image behaviour | `/faces/search` returns **200 with empty matches**, not 422 | Per Doc 7 — ZepIris does not error on a bad search image. Platform wraps and applies toggle logic. |
 | Tenant_id source | Always from session | Forging via request param must be impossible (RLS catches it anyway). |
@@ -138,7 +138,7 @@ Mirror Doc 6 §2 exactly — each is demonstrated live:
 - **Kiosk:** match <2s; toggle alternates correctly; unregistered → "not registered" + logged; printed photo rejected by spoof; blacklist → alert; event on dashboard <10s.
 - **Multi-tenancy:** A never sees/matches B; cross-tenant id → 404; RLS blocks a forgotten filter.
 - **DPDP:** no enroll without consent; export machine-readable; erasure clears 4 stores + verified + certificate; every face op audited with request_id; audit uneditable via API.
-- **Security:** TLS 1.3 only; cookies HttpOnly/Secure/SameSite=Strict; CSRF enforced; admin TOTP; pen test → zero critical/high before go-live.
+- **Security:** TLS 1.3 only; cookies HttpOnly/Secure/SameSite=Strict; CSRF enforced; pen test → zero critical/high before go-live.
 
 **Test minimums:** 80% unit on service code; every endpoint integration-tested (happy+error); isolation tests per tenant table; all §2.4 DPDP criteria; load test at peak×2; pen test before go-live.
 

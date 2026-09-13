@@ -47,7 +47,7 @@ API + migration `0006`). All verified end-to-end against the live stack.
 
 ## E. Testing & QA (Doc 6 §3.1)
 - 🟡 **Coverage ~78%** (pytest-cov; `--cov-fail-under=70` gate in CI); **63 tests**. Past-80% + per-table isolation tests still pending.
-- ✅ **Acceptance criteria checker** — `scripts/acceptance.py` verifies all Build Plan §2 criteria against real Postgres: **22/22 PASS** (self-reg, consent gate, toggle, cross-tenant 404, RLS, erasure cascade, audit immutability, CSRF, TOTP). *(built 2026-06-18)*
+- ✅ **Acceptance criteria checker** — `scripts/acceptance.py` verifies all Build Plan §2 criteria against real Postgres: **22/22 PASS** (self-reg, consent gate, toggle, cross-tenant 404, RLS, erasure cascade, audit immutability, CSRF). *(built 2026-06-18)*
 - ✅ **Load test** — Locust harness (`loadtest/locustfile.py`) ran against the live stack; **caught + fixed a real concurrency race** (duplicate-key 500 on `current_presence` → atomic upsert) + DB-pool tuning; clean baseline **0% errors, p95 340ms, ~80 rps on one dev worker**. True peak×2 needs multi-replica infra **[external]**. *(built 2026-06-18)*
 - 🟡 **Security scans** — `bandit` (SAST, **0 medium/high**) + `pip-audit` in CI; **python-multipart patched** (6 CVEs); see `docs/SECURITY.md`. Independent **penetration test** + DPDP review still **[external]**.
 - 🟡 **Integration coverage** — core + Phase 3 sweep covered; not literally every endpoint/table.

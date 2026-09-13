@@ -42,7 +42,7 @@ def _admin(tc: TestClient):
 
 def main() -> None:
     a = TestClient(app)
-    orgA, adminA_email, adminA_secret = _admin(a)
+    orgA, adminA_email = _admin(a)
 
     print("\n2.1 Self-registration")
     r = a.post("/api/v1/register", json={"org_code": "NOPE-9999", "first_name": "X", "email": f"x{uuid.uuid4().hex[:5]}@x.com"})
@@ -94,7 +94,7 @@ def main() -> None:
 
     print("\n2.3 Multi-tenancy isolation")
     b = TestClient(app)
-    orgB, _, _ = _admin(b)
+    orgB, _ = _admin(b)
     r = b.post(f"/api/v1/devices/{dev['device_id']}/disable")
     check("cross-tenant resource -> 404 (not other tenant's data)", r.status_code == 404)
     db = SessionLocal()

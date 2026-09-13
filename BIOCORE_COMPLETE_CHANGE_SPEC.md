@@ -1650,7 +1650,10 @@ The bridge receives only an allow/deny command and signed context, not the face 
 Keep current:
 
 - Argon2 passwords.
-- Admin TOTP.
+- ~~Admin TOTP.~~ **REMOVED 2026-09-13 by product decision.** Admin sign-in is
+  email + password. This is a deliberate deviation from this spec, not an
+  oversight: the second factor, its storage column and every reference were
+  removed (migration 0013). Reinstating it means re-implementing, not re-enabling.
 - Redis sessions.
 - HttpOnly cookies.
 - CSRF protection.

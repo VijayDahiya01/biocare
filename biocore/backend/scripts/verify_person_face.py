@@ -4,7 +4,6 @@
     python -m scripts.verify_person_face
 """
 import uuid
-from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 
@@ -26,8 +25,8 @@ def main():
     office = TestClient(app)
     org = f"OFF-{uuid.uuid4().hex[:8]}"
     aemail = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-          "vertical": "office", "admin_email": aemail, "admin_password": "supersecret123"}
-    sec = parse_qs(urlparse(uri).query)["secret"][0]
+    office.post("/api/v1/admin/tenants", json={"name": "Office Co", "org_code": org,
+                "vertical": "office", "admin_email": aemail, "admin_password": "supersecret123"})
     office.post("/api/v1/auth/login", json={"email": aemail, "password": "supersecret123"})
     office.headers.update({"X-CSRF-Token": office.cookies.get("csrf")})
     dev = office.post("/api/v1/devices", json={"name": "OFF-KIOSK"}).json()["data"]

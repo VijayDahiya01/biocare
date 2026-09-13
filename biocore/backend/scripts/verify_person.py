@@ -4,7 +4,6 @@ sector -> cross-person isolation. In-process (real Postgres, fake Redis for OTP)
     python -m scripts.verify_person
 """
 import uuid
-from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 
@@ -24,8 +23,8 @@ def make_business(vertical: str):
     tc = TestClient(app)
     org = f"{vertical[:3].upper()}-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-                  "vertical": vertical, "admin_email": email, "admin_password": "supersecret123"}
-    secret = parse_qs(urlparse(uri).query)["secret"][0]
+    tc.post("/api/v1/admin/tenants", json={"name": f"{vertical.title()} Co", "org_code": org,
+            "vertical": vertical, "admin_email": email, "admin_password": "supersecret123"})
     tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
     tc.headers.update({"X-CSRF-Token": tc.cookies.get("csrf")})
     return tc, org

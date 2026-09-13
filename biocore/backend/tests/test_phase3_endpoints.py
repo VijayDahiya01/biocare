@@ -24,7 +24,7 @@ def admin(require_stack):
     tc = TestClient(app)
     org = f"P3-{uuid.uuid4().hex[:8]}"
     email = f"admin_{uuid.uuid4().hex[:6]}@acme.com"
-    r = tc.post("/api/v1/admin/tenants", json={
+    tc.post("/api/v1/admin/tenants", json={
         "name": "P3", "org_code": org, "vertical": "office",
         "admin_email": email, "admin_password": "supersecret123"})
     tc.post("/api/v1/auth/login", json={"email": email, "password": "supersecret123"})
