@@ -41,7 +41,7 @@ export default function Hub() {
       ]);
       setProfile(p); setBySector(b.by_sector); setInvites(inv.items);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) router.push("/app/login");
+      if (e instanceof ApiError && e.status === 401) router.push("/member/login");
       else setErr(e instanceof ApiError ? e.message : "Could not load");
     }
   }, [router]);
@@ -103,14 +103,14 @@ export default function Hub() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "18px 4px 4px" }}>
         <div className="sector" style={{ margin: 0 }}>My places</div>
-        <a href="/app/join" style={{ fontSize: 14, fontWeight: 600 }}>+ Join</a>
+        <a href="/member/join" style={{ fontSize: 14, fontWeight: 600 }}>+ Join</a>
       </div>
 
       {Object.keys(bySector).length === 0 && (
         <div className="app-card" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 34 }}>🧭</div>
           <p className="app-sub">You haven&apos;t joined any place yet.</p>
-          <a href="/app/join"><button className="btn primary">Join a business</button></a>
+          <a href="/member/join"><button className="btn primary">Join a business</button></a>
         </div>
       )}
 
@@ -119,7 +119,7 @@ export default function Hub() {
           <div className="sector">{icon(sector)} {sector}</div>
           <div className="tiles">
             {list.map((b) => (
-              <a key={b.membership_id} className="tile" href={`/app/b/${b.membership_id}`}>
+              <a key={b.membership_id} className="tile" href={`/member/b/${b.membership_id}`}>
                 <div className="ic">{icon(b.sector)}</div>
                 <div style={{ minWidth: 0 }}>
                   <div className="tt">{b.business}</div>

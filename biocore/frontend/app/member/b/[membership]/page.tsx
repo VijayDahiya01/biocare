@@ -31,7 +31,7 @@ export default function BusinessDetail({ params }: { params: { membership: strin
   const load = useCallback(async () => {
     try { setD(await api<Detail>(`/person/businesses/${membership}`)); }
     catch (e) {
-      if (e instanceof ApiError && e.status === 401) router.push("/app/login");
+      if (e instanceof ApiError && e.status === 401) router.push("/member/login");
       else setErr(e instanceof ApiError ? e.message : "Could not load");
     }
   }, [membership, router]);
@@ -51,7 +51,7 @@ export default function BusinessDetail({ params }: { params: { membership: strin
 
   return (
     <div>
-      <a className="app-back" href="/app">← My places</a>
+      <a className="app-back" href="/member">← My places</a>
       <h1 className="app-h1">{d.business}</h1>
       <p className="app-sub">{humanize(d.sector)} · {humanize(d.role)}</p>
 
@@ -68,7 +68,7 @@ export default function BusinessDetail({ params }: { params: { membership: strin
         ) : (
           <>
             <p className="app-sub" style={{ margin: "0 0 6px" }}>Set up once, then walk in with just your face — no cards, no queues.</p>
-            <a href={`/app/b/${membership}/verify`}><button className="btn primary">Set up face entry</button></a>
+            <a href={`/member/b/${membership}/verify`}><button className="btn primary">Set up face entry</button></a>
           </>
         )}
         {err && <div className="app-err">{err}</div>}
@@ -81,7 +81,7 @@ export default function BusinessDetail({ params }: { params: { membership: strin
         </div>
       </div>
 
-      <a className="tile" href={`/app/b/${membership}/events`}>
+      <a className="tile" href={`/member/b/${membership}/events`}>
         <div className="ic">🎫</div>
         <div><div className="tt">Events</div><div className="ts">Register & manage consent</div></div>
         <span className="chev">›</span>

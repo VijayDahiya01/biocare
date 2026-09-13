@@ -9,18 +9,18 @@ export default function PersonLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
 
   // login renders its own full-screen hero (no app bar)
-  if (pathname === "/app/login") return <>{children}</>;
+  if (pathname === "/member/login") return <>{children}</>;
 
   async function logout() {
     try { await api("/person/auth/logout", { method: "POST" }); } catch {}
-    router.push("/app/login");
+    router.push("/member/login");
   }
 
   return (
     <div className="app-shell">
       <header className="app-top">
         <div className="wrap">
-          <a href="/app" className="brand"><span className="mark">B</span> BioCore</a>
+          <a href="/member" className="brand"><span className="mark">B</span> BioCore</a>
           <button onClick={logout}>Sign out</button>
         </div>
       </header>

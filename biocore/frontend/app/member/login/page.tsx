@@ -22,7 +22,7 @@ export default function PersonLogin() {
         setSent(true);
       } else {
         await api("/person/auth/otp/verify", { method: "POST", body: { email: email.trim(), otp: otp.trim() } });
-        router.push("/app");
+        router.push("/member");
       }
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Sign-in failed");
@@ -33,7 +33,7 @@ export default function PersonLogin() {
     setErr(null); setBusy(true);
     try {
       await api("/person/auth/dev-login", { method: "POST", body: { email: email.trim() || "dev@example.com" } });
-      router.push("/app");
+      router.push("/member");
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Dev sign-in unavailable (enable DEV_LOGIN)");
     } finally { setBusy(false); }

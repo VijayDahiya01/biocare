@@ -29,7 +29,7 @@ export default function VerifyRouter() {
         const pending = all.filter((b) => !b.face_verified_here);
         // One place still to do: skip the middle step entirely.
         if (pending.length === 1) {
-          router.replace(`/app/b/${pending[0].membership_id}/verify`);
+          router.replace(`/member/b/${pending[0].membership_id}/verify`);
           return;
         }
         setPlaces(all);
@@ -42,7 +42,7 @@ export default function VerifyRouter() {
   if (err) {
     return (
       <div>
-        <a className="app-back" href="/app">← Home</a>
+        <a className="app-back" href="/member">← Home</a>
         <h1 className="app-h1">Verify your face</h1>
         <div className="app-err" style={{ marginTop: 14 }}>{err}</div>
       </div>
@@ -52,7 +52,7 @@ export default function VerifyRouter() {
   if (places === null) {
     return (
       <div>
-        <a className="app-back" href="/app">← Home</a>
+        <a className="app-back" href="/member">← Home</a>
         <h1 className="app-h1">Verify your face</h1>
         <p className="app-sub">One moment…</p>
       </div>
@@ -62,14 +62,14 @@ export default function VerifyRouter() {
   if (places.length === 0) {
     return (
       <div>
-        <a className="app-back" href="/app">← Home</a>
+        <a className="app-back" href="/member">← Home</a>
         <h1 className="app-h1">Join a place first</h1>
         <p className="app-sub">
           Your face is verified for one place at a time, so there is nothing to do until you have
           joined somewhere. You need the organisation code from whoever invited you.
         </p>
         <div className="app-card" style={{ marginTop: 14 }}>
-          <a className="btn primary" href="/app/join">Join a place</a>
+          <a className="btn primary" href="/member/join">Join a place</a>
         </div>
       </div>
     );
@@ -80,7 +80,7 @@ export default function VerifyRouter() {
 
   return (
     <div>
-      <a className="app-back" href="/app">← Home</a>
+      <a className="app-back" href="/member">← Home</a>
       <h1 className="app-h1">Verify your face</h1>
       <p className="app-sub">
         Each place verifies you separately, and holds only its own record. Pick where to do it.
@@ -89,7 +89,7 @@ export default function VerifyRouter() {
       {pending.length > 0 && (
         <div className="app-card" style={{ marginTop: 14 }}>
           {pending.map((b) => (
-            <a key={b.membership_id} className="toggle" href={`/app/b/${b.membership_id}/verify`}>
+            <a key={b.membership_id} className="toggle" href={`/member/b/${b.membership_id}/verify`}>
               <span className="tw">
                 <b>{b.business}</b>
                 <span>{b.sector?.toUpperCase()} · not verified yet</span>
@@ -103,7 +103,7 @@ export default function VerifyRouter() {
         <div className="app-card">
           <p className="app-sub" style={{ marginBottom: 8 }}>Already verified</p>
           {done.map((b) => (
-            <a key={b.membership_id} className="toggle" href={`/app/b/${b.membership_id}`}>
+            <a key={b.membership_id} className="toggle" href={`/member/b/${b.membership_id}`}>
               <span className="tw">
                 <b>{b.business}</b>
                 <span>{b.sector?.toUpperCase()} · verified</span>

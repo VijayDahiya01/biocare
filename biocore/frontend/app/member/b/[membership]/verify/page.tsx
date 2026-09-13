@@ -64,7 +64,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
       });
       setBusiness(d.business); setStep("capture");
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) { router.push("/app/login"); return; }
+      if (e instanceof ApiError && e.status === 401) { router.push("/member/login"); return; }
       setErr(e instanceof ApiError ? e.message : "Failed");
     } finally { setBusy(false); }
   }
@@ -84,7 +84,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
 
   return (
     <div>
-      <a className="app-back" href={`/app/b/${membership}`}>← Back</a>
+      <a className="app-back" href={`/member/b/${membership}`}>← Back</a>
       <h1 className="app-h1">Set up face entry</h1>
       <p className="app-sub">Three quick steps — done once. Your photo isn&apos;t stored, only a verified confirmation.</p>
 
@@ -134,7 +134,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
           <h2 style={{ marginTop: 6 }}>You&apos;re all set{business ? ` at ${business}` : ""}</h2>
           <p className="app-sub">You can now walk in with just your face. Your photo wasn&apos;t stored — only a secure confirmation.</p>
           <div style={{ marginTop: 8 }}><span className="pill green">✓ Face entry ready</span></div>
-          <a href={`/app/b/${membership}`}><button className="btn primary" style={{ marginTop: 14 }}>Done</button></a>
+          <a href={`/member/b/${membership}`}><button className="btn primary" style={{ marginTop: 14 }}>Done</button></a>
         </div>
       )}
     </div>

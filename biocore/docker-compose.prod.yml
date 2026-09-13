@@ -23,6 +23,18 @@
 # backend/app/core/guards.py for the exact list; the logs name every problem.
 
 services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    expose:
+      - "6379"
+    restart: unless-stopped
+    logging: &logs
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
   gateway:
     image: nginx:1.27
     depends_on: [api, frontend]
@@ -37,9 +49,7 @@ services:
       - ./infra/nginx/certs:/etc/nginx/certs:ro
       - certbot-webroot:/var/www/certbot:ro
     restart: unless-stopped
-    logging: &logs
-      driver: json-file
-      options: { max-size: "10m", max-file: "5" }
+    logging: *logs
 
   frontend:
     build: ./frontend
@@ -52,6 +62,7 @@ services:
 
   api:
     build: ./backend
+    depends_on: [redis]
     env_file: .env
     expose:
       - "8080"
@@ -76,3 +87,4 @@ services:
 
 volumes:
   certbot-webroot:
+  redis-data:

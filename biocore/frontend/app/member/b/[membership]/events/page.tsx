@@ -15,7 +15,7 @@ export default function Events({ params }: { params: { membership: string } }) {
   const load = useCallback(async () => {
     try { setItems((await api<{ items: Ev[] }>(`/person/businesses/${membership}/events`)).items); }
     catch (e) {
-      if (e instanceof ApiError && e.status === 401) router.push("/app/login");
+      if (e instanceof ApiError && e.status === 401) router.push("/member/login");
       else setErr(e instanceof ApiError ? e.message : "Could not load");
     }
   }, [membership, router]);
@@ -25,7 +25,7 @@ export default function Events({ params }: { params: { membership: string } }) {
     setErr(null);
     try { await api(`/person/events/${id}/register`, { method: "POST" }); await load(); }
     catch (e) {
-      if (e instanceof ApiError && e.code === "NO_MASTER_FACE") { router.push(`/app/b/${membership}/verify`); return; }
+      if (e instanceof ApiError && e.code === "NO_MASTER_FACE") { router.push(`/member/b/${membership}/verify`); return; }
       setErr(e instanceof ApiError ? e.message : "Failed");
     }
   }
@@ -36,7 +36,7 @@ export default function Events({ params }: { params: { membership: string } }) {
 
   return (
     <div>
-      <a className="app-back" href={`/app/b/${membership}`}>← Back</a>
+      <a className="app-back" href={`/member/b/${membership}`}>← Back</a>
       <h1 className="app-h1">Events</h1>
       {err && <div className="app-err">{err}</div>}
 

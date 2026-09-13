@@ -5,7 +5,7 @@ export default function Home() {
         <h1>BioCore</h1>
         <p className="muted">Face authentication &amp; attendance platform.</p>
         <div style={{ display: "grid", gap: 10, marginTop: 18 }}>
-          <a href="/app/login"><button style={{ width: "100%" }}>Your BioCore (user app)</button></a>
+          <a href="/member/login"><button style={{ width: "100%" }}>Your BioCore (user app)</button></a>
           <a href="/admin/login"><button className="secondary" style={{ width: "100%" }}>Admin portal</button></a>
           <a href="/guard"><button className="secondary" style={{ width: "100%" }}>Check-in terminal (guard)</button></a>
           <a href="/onboard"><button className="ghost" style={{ width: "100%" }}>Create a company (onboarding)</button></a>
