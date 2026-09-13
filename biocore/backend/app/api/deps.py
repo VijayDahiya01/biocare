@@ -28,7 +28,11 @@ def get_principal(request: Request) -> Principal:
     if not session_id:
         raise ApiError(401, "UNAUTHENTICATED", "No valid session.")
     data = read_session(session_id)
-    if not data:
+    if not data or "user_id" not in data or "role" not in data:
+        # The same cookie name carries admin/staff sessions (user_id + role) and
+        # person/member sessions (kind="person", person_id only, no user_id/role) — one
+        # browser can hold either at a time. A person session presented here is not an
+        # error in the data, just the wrong kind of session for an admin-only endpoint.
         raise ApiError(401, "UNAUTHENTICATED", "Session expired or invalid.")
     return Principal(
         session_id=session_id,
