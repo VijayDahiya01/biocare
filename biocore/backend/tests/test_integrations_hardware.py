@@ -68,7 +68,14 @@ def test_connector_capability_guard():
         get_roster_source("does_not_exist")
 
 
-def test_roster_sync_upserts_subjects(tenant):
+@pytest.fixture
+def connectors_on(monkeypatch):
+    """Business integrations are OFF by default — a deployment that never calls a connector
+    should not have to reason about the stand-in. A test OF connectors turns them on."""
+    monkeypatch.setattr(settings, "connectors_enabled", True)
+
+
+def test_roster_sync_upserts_subjects(tenant, connectors_on):
     db = SessionLocal(); set_tenant_guc(db, tenant)
     try:
         r1 = integration_sync.sync_roster(db, tenant_id=tenant, kind="school_sis",
@@ -85,7 +92,7 @@ def test_roster_sync_upserts_subjects(tenant):
         db.close()
 
 
-def test_push_entry_events(tenant):
+def test_push_entry_events(tenant, connectors_on):
     db = SessionLocal(); set_tenant_guc(db, tenant)
     try:
         db.add(EntryAttempt(tenant_id=tenant, authorization_result="allow", reason_code="ALLOWED"))

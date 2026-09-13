@@ -20,6 +20,10 @@ def _supported(kind: str, capability: str) -> None:
 
 def get_roster_source(kind: str) -> RosterSource:
     _supported(kind, "roster")
+    if not settings.connectors_enabled:
+        raise ConnectorError(
+            "Business integrations are switched off for this deployment "
+            "(CONNECTORS_ENABLED=false).")
     if settings.fake_connectors:
         from app.adapters.connectors.fake import FakeRosterSource
         return FakeRosterSource(kind)
@@ -30,6 +34,10 @@ def get_roster_source(kind: str) -> RosterSource:
 
 def get_event_sink(kind: str) -> EventSink:
     _supported(kind, "events")
+    if not settings.connectors_enabled:
+        raise ConnectorError(
+            "Business integrations are switched off for this deployment "
+            "(CONNECTORS_ENABLED=false).")
     if settings.fake_connectors:
         from app.adapters.connectors.fake import FakeEventSink
         return FakeEventSink(kind)

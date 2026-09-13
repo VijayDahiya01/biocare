@@ -172,20 +172,26 @@ def complete_verification(db: Session, *, person_id: str, membership_id: str, re
         if document and level == "face_only":
             document = None          # not asked for: do not send it, do not process it
 
-        # The government check compares against what we already hold: the name the person
-        # gave us at sign-up, and — for Aadhaar, which returns a photo — their live face.
-        gov_claims = identity_proofing.run_government_fetch(
-            db, session=s, subject_ref=reference,
-            credential=({"type": "aadhaar", "reference": reference,
-                         "expected_name": full_name,
-                         "reference_id": gov_reference_id, "otp": gov_otp}
-                        if gov_reference_id and gov_otp else
-                        {"reference": reference, "expected_name": full_name}),
-            face_compare=_compare_to_government_photo, live_image=image)
-
-        if level == "face_and_government" and not (gov_reference_id and gov_otp):
-            raise ApiError(400, "GOVERNMENT_OTP_REQUIRED",
-                           "Enter your Aadhaar number and the code sent to your phone.")
+        # ONLY contact a government record when this organisation asked for one.
+        #
+        # This used to run at every level, which meant a tenant that asked for nothing but a
+        # selfie still had "identity_verified / document_valid / age_over_18 = true" written
+        # against every one of its people — claims nobody had checked. Worse, with a real
+        # provider configured it would have made a billed UIDAI call per registration for an
+        # organisation that never asked for one.
+        gov_claims = None
+        if level == "face_and_government":
+            # Checked BEFORE the call: sending a missing code to the provider would waste a
+            # request (a billed one, live) to be told what we already know.
+            if not (gov_reference_id and gov_otp):
+                raise ApiError(400, "GOVERNMENT_OTP_REQUIRED",
+                               "Enter your Aadhaar number and the code sent to your phone.")
+            gov_claims = identity_proofing.run_government_fetch(
+                db, session=s, subject_ref=reference,
+                credential={"type": "aadhaar", "reference": reference,
+                            "expected_name": full_name,
+                            "reference_id": gov_reference_id, "otp": gov_otp},
+                face_compare=_compare_to_government_photo, live_image=image)
 
         if level == "face_and_government":
             # Only meaningful at this level: the other levels never contacted a government
