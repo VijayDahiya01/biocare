@@ -53,10 +53,10 @@ def production_problems() -> list[str]:
             "with a key derived from the session secret. Use a real KMS/HSM, or at minimum set "
             "KMS_ROOT_KEY from a secret store.")
 
-    if not settings.smtp_url:
+    if not settings.smtp_url and not settings.brevo_api_key:
         problems.append(
-            "SMTP_URL is unset — one-time codes are only written to the log, so nobody can "
-            "actually sign in. Configure outbound email.")
+            "Neither SMTP_URL nor BREVO_API_KEY is set — one-time codes are only written to "
+            "the log, so nobody can actually sign in. Configure outbound email.")
 
     if settings.credential_engine == "bioverify" and not settings.bioverify_url:
         problems.append("CREDENTIAL_ENGINE=bioverify but BIOVERIFY_URL is unset.")

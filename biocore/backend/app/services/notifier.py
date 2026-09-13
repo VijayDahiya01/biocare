@@ -1,9 +1,13 @@
 """Outbound notifications.
 
-Email: real SMTP when SMTP_URL is set; otherwise a logging stub so the
-registration/OTP flows work locally without a mail server. SMS/WhatsApp remain
-stubs pending provider credentials. Priority routing + async delivery (RabbitMQ)
-are a later step; today email is sent synchronously with a short timeout.
+Email: Brevo's HTTP API when BREVO_API_KEY is set, real SMTP when SMTP_URL is set,
+otherwise a logging stub so the registration/OTP flows work locally without a mail
+server. The HTTP path exists because some hosts (e.g. DigitalOcean droplets) block
+outbound SMTP ports (25/465/587) at the network level while leaving 443 open — SMTP
+then fails with a connection timeout no matter how correct the credentials are.
+SMS/WhatsApp remain stubs pending provider credentials. Priority routing + async
+delivery (RabbitMQ) are a later step; today email is sent synchronously with a
+short timeout.
 """
 import logging
 import smtplib
@@ -11,9 +15,32 @@ import ssl
 from email.message import EmailMessage
 from urllib.parse import unquote, urlparse
 
+import httpx
+
 from app.core.config import settings
 
 log = logging.getLogger("biocore.notifier")
+
+
+def _send_via_brevo_api(to: str, subject: str, body: str) -> None:
+    from_email = settings.smtp_from
+    from_name = "BioCore"
+    if "<" in from_email and ">" in from_email:
+        from_name = from_email.split("<")[0].strip() or from_name
+        from_email = from_email.split("<", 1)[1].split(">", 1)[0].strip()
+
+    resp = httpx.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={"api-key": settings.brevo_api_key, "Content-Type": "application/json"},
+        json={
+            "sender": {"name": from_name, "email": from_email},
+            "to": [{"email": to}],
+            "subject": subject,
+            "textContent": body,
+        },
+        timeout=settings.smtp_timeout_seconds,
+    )
+    resp.raise_for_status()
 
 
 def _send_smtp(to: str, subject: str, body: str) -> None:
@@ -50,6 +77,13 @@ def _send_smtp(to: str, subject: str, body: str) -> None:
 
 def deliver_email(to: str, subject: str, body: str) -> None:
     """Actually send (or stub-log) an email. Shared by inline + worker paths."""
+    if settings.brevo_api_key:
+        try:
+            _send_via_brevo_api(to, subject, body)
+            log.info("[email] sent via brevo-api to=%s subject=%s", to, subject)
+        except Exception as e:  # email failure must not break the calling request
+            log.error("[email] FAILED via brevo-api to=%s subject=%s err=%s", to, subject, e)
+        return
     if not settings.smtp_url:
         log.info("[email:stub] to=%s subject=%s body=%s", to, subject, body)
         return

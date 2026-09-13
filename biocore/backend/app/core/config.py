@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     smtp_url: str = ""
     smtp_from: str = "BioCore <no-reply@biocore.local>"
     smtp_timeout_seconds: float = 10.0
+    # Brevo's transactional HTTP API (https://api.brevo.com), as an alternative to SMTP_URL.
+    # Takes priority when set. Needed on hosts where the cloud provider blocks outbound
+    # SMTP ports (25/465/587) but leaves 443 open — confirmed on this DigitalOcean droplet.
+    # This is the API key from Brevo's "API Keys" tab, NOT the SMTP key (different value).
+    brevo_api_key: str = ""
     sms_provider_key: str = ""
 
     # where generated PDFs (certificates/receipts/musters) are written. In
