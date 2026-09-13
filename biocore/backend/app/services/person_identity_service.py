@@ -17,6 +17,7 @@ from app.models import (
     ConsentReceipt,
     FaceCredential,
     IdentityVerificationSession,
+    Person,
     Tenant,
     TenantSubject,
     User,
@@ -62,7 +63,21 @@ def start_verification(db: Session, *, person_id: str, membership_id: str,
     with bypass_rls(db):
         u = _membership(db, person_id, membership_id)
         t = db.get(Tenant, u.tenant_id)
-        subj = _subject_for(db, u.tenant_id, membership_id, f"{u.first_name} {u.last_name or ''}".strip())
+
+        # A credential must belong to a named person. Until they have given their details,
+        # `first_name` is a placeholder taken from their email address — issuing against that
+        # would put "asha_8f8906" on a guard's screen and leave nothing to check a government
+        # record against.
+        person = db.get(Person, person_id)
+        if person is None or person.profile_completed_at is None:
+            raise ApiError(409, "PROFILE_INCOMPLETE",
+                           "Please fill in your details before verifying.")
+
+        # Re-sync the name: they may have joined this business before completing their profile.
+        full_name = f"{person.first_name} {person.last_name or ''}".strip()
+        if u.first_name != person.first_name or u.last_name != person.last_name:
+            u.first_name, u.last_name = person.first_name, person.last_name
+        subj = _subject_for(db, u.tenant_id, membership_id, full_name)
         s = identity_proofing.start_session(db, tenant_id=u.tenant_id, tenant_subject_id=subj.id,
                                             provider_label="self")
         valid = {p.value for p in ConsentPurpose}
@@ -73,14 +88,21 @@ def start_verification(db: Session, *, person_id: str, membership_id: str,
         write_audit(db, action="PERSON_VERIFY_START", actor_id=person_id, tenant_id=str(u.tenant_id),
                     target_id=membership_id, request_id=request_id)
         db.commit()
-        return {"session_id": str(s.id), "tenant_subject_id": str(subj.id), "business": t.name}
+        return {"session_id": str(s.id), "tenant_subject_id": str(subj.id), "business": t.name,
+                # What this organisation asks for. The app uses it to decide whether to
+                # collect an identity document after the selfie.
+                "verification_level": t.verification_level or "face_only"}
 
 
 def complete_verification(db: Session, *, person_id: str, membership_id: str, reference: str,
-                          image: str, request_id: str | None) -> dict:
+                          image: str, request_id: str | None, document: str | None = None,
+                          document_type: str = "PASSPORT") -> dict:
     with bypass_rls(db):
         u = _membership(db, person_id, membership_id)
-        subj = _subject_for(db, u.tenant_id, membership_id, f"{u.first_name} {u.last_name or ''}".strip())
+        person = db.get(Person, person_id)
+        full_name = (f"{person.first_name} {person.last_name or ''}".strip() if person
+                     else f"{u.first_name} {u.last_name or ''}".strip())
+        subj = _subject_for(db, u.tenant_id, membership_id, full_name)
         s = db.execute(
             select(IdentityVerificationSession)
             .where(IdentityVerificationSession.tenant_subject_id == subj.id)
@@ -95,6 +117,14 @@ def complete_verification(db: Session, *, person_id: str, membership_id: str, re
             )).scalars().first():
                 raise ApiError(403, "CONSENT_REQUIRED", "Consent is required to verify.")
 
+        # What this organisation asks for decides whether a document is required here.
+        level = (db.get(Tenant, u.tenant_id).verification_level or "face_only")
+        if level == "face_and_document" and not document:
+            raise ApiError(400, "DOCUMENT_REQUIRED",
+                           "This organisation asks for an identity document as well as a selfie.")
+        if document and level == "face_only":
+            document = None          # not asked for: do not send it, do not process it
+
         identity_proofing.run_government_fetch(db, session=s, subject_ref=reference,
                                                credential={"reference": reference})
         # Mint through the shared issuer so self-service and the operator path always agree on
@@ -106,13 +136,14 @@ def complete_verification(db: Session, *, person_id: str, membership_id: str, re
         cred, qr_png = credential_issuing.mint(
             db, tenant_id=u.tenant_id, subject_id=subj.id, image=image,
             purpose=ConsentPurpose.ENTRY_AUTHENTICATION.value,
-            expires=retention_service.credential_expiry(db, u.tenant_id))
+            expires=retention_service.credential_expiry(db, u.tenant_id),
+            document=document, document_type=document_type)
         credential_id = str(cred.id)
         write_audit(db, action="PERSON_VERIFY_COMPLETE", actor_id=person_id, tenant_id=str(u.tenant_id),
                     target_id=membership_id, request_id=request_id, metadata={"outcome": outcome.value})
         db.commit()
         result = {"verified": outcome == VerificationOutcome.VERIFIED, "outcome": outcome.value,
-                  "credential_id": credential_id}
+                  "credential_id": credential_id, "verification_level": level}
         if qr_png:
             # Under BioVerify the person carries the credential, so hand them the QR to keep.
             result["qr_png_b64"] = qr_png

@@ -6,9 +6,9 @@ to the authenticated person in the app layer. `business_invites` and
 `event_registrations` are tenant-scoped (FORCE RLS like the rest).
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, String, text
+from sqlalchemy import Boolean, Date, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,13 @@ class Person(Base):
     phone: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     first_name: Mapped[str] = mapped_column(String, nullable=False)
     last_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String, nullable=True)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Set when the person confirms their own details. Until then `first_name` may be a
+    # placeholder derived from their email address, which is not a name and must not be
+    # shown to a guard or compared against a government record.
+    profile_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),
+                                                                  nullable=True)
     created_at: Mapped[datetime] = created_at_col()
 
 

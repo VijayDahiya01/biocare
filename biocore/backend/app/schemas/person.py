@@ -29,3 +29,12 @@ class FaceAcks(BaseModel):
 class PersonFaceEnroll(BaseModel):
     image: str
     acknowledgements: FaceAcks
+
+
+class ProfileUpdate(BaseModel):
+    """Who the person actually is. Only the name is required — the rest is theirs to give."""
+    first_name: str
+    last_name: str | None = None
+    gender: str | None = None          # free text: people describe themselves, not a fixed list
+    date_of_birth: str | None = None   # YYYY-MM-DD
+    phone: str | None = None

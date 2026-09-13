@@ -21,5 +21,10 @@ class Tenant(Base):
     branding: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     dpdp_config: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     # match_threshold, modules_enabled, alert routing, etc.
+    # How much proof this organisation wants before it will issue an entry credential:
+    #   face_only            a selfie (the default, and what every tenant did before this)
+    #   face_and_document    a selfie plus an identity document, face-matched against it
+    #   face_and_government  a selfie checked against a government record
+    verification_level: Mapped[str] = mapped_column(String, server_default=text("'face_only'"))
     settings: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = created_at_col()

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, api } from "../../lib/api";
 
-type Profile = { name: string; email: string; face_verified: boolean; business_count: number };
+type Profile = { name: string; email: string; face_verified: boolean; business_count: number;
+                 profile_complete?: boolean };
 type Biz = { membership_id: string; business: string; sector: string; role: string; status: string; face_verified_here: boolean };
 type Invite = { invite_id: string; business: string; sector: string; role: string };
 
@@ -59,9 +60,11 @@ export default function Hub() {
       {/* profile */}
       <div className="app-card grad">
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div className="avatar onGrad">{initials(profile.name)}</div>
+          <a href="/member/profile" className="avatar onGrad" style={{ textDecoration: "none" }}>{profile.profile_complete === false ? "?" : initials(profile.name)}</a>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{profile.name}</div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>
+              {profile.profile_complete === false ? "Your details" : profile.name}
+            </div>
             <div className="app-sub" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{profile.email}</div>
             <div style={{ marginTop: 6 }}>
               {profile.face_verified
@@ -70,7 +73,13 @@ export default function Hub() {
             </div>
           </div>
         </div>
-        {!profile.face_verified && (
+        {profile.profile_complete === false ? (
+          <a href="/member/profile" style={{ textDecoration: "none" }}>
+            <p className="app-sub" style={{ marginTop: 10, color: "rgba(255,255,255,.92)" }}>
+              We only know your email so far. <b>Add your name →</b>
+            </p>
+          </a>
+        ) : !profile.face_verified && (
           <p className="app-sub" style={{ marginTop: 10, color: "rgba(255,255,255,.85)" }}>
             Open a place below and tap <b>Set up face entry</b> to get started.
           </p>

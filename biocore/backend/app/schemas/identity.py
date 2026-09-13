@@ -47,6 +47,8 @@ class StartVerify(BaseModel):
 class CompleteVerify(BaseModel):
     reference: str = ""
     image: str
+    document: str | None = None      # required when the org asks for one
+    document_type: str = "PASSPORT"
 
 
 class RetentionPolicyBody(BaseModel):

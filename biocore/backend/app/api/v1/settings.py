@@ -4,10 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import Principal, auth_db, get_db_for, get_principal, require_role
-from app.core.envelope import success
+from app.core.envelope import ApiError, success
 from app.dpdp.audit import write_audit
 from app.models import Tenant, WebhookConfig
 from app.schemas.access import WebhookCreate
+
+# How much proof an organisation wants before it issues an entry credential.
+_VERIFICATION_LEVELS = ("face_only", "face_and_document", "face_and_government")
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 _ADMIN = ("entity_admin", "super_admin")
@@ -24,6 +27,7 @@ def get_settings(request: Request, principal: Principal = Depends(require_role(*
     return success(request, {
         "branding": tenant.branding, "dpdp": tenant.dpdp_config,
         "settings": tenant.settings, "vertical": tenant.vertical, "plan": tenant.plan,
+        "verification_level": tenant.verification_level or "face_only",
     })
 
 
@@ -36,8 +40,15 @@ def patch_settings(request: Request, body: dict,
         tenant.branding = {**(tenant.branding or {}), **body["branding"]}
     if "dpdp" in body:
         tenant.dpdp_config = {**(tenant.dpdp_config or {}), **body["dpdp"]}
+    if "verification_level" in body:
+        level = str(body["verification_level"])
+        if level not in _VERIFICATION_LEVELS:
+            raise ApiError(400, "VERIFICATION_LEVEL_INVALID",
+                           f"Choose one of: {', '.join(_VERIFICATION_LEVELS)}.")
+        tenant.verification_level = level
     # everything else (match_threshold, modules_enabled, ...) goes into settings.
-    extras = {k: v for k, v in body.items() if k not in ("branding", "dpdp")}
+    extras = {k: v for k, v in body.items()
+              if k not in ("branding", "dpdp", "verification_level")}
     if extras:
         tenant.settings = {**(tenant.settings or {}), **extras}
     write_audit(db, action="SETTINGS_UPDATED", actor_id=principal.user_id,

@@ -83,7 +83,8 @@ def _retire(db: Session, superseded: list[FaceCredential]) -> None:
 
 def mint(db: Session, *, tenant_id, subject_id, image: str,
          purpose: str = ConsentPurpose.ENTRY_AUTHENTICATION.value,
-         expires: datetime | None = None) -> tuple[FaceCredential, str | None]:
+         expires: datetime | None = None, document: str | None = None,
+         document_type: str = "PASSPORT") -> tuple[FaceCredential, str | None]:
     """Create the entry credential; returns (credential, qr_png_b64 or None).
 
     Under BioVerify the service enrols the face and returns a sealed, scannable credential whose
@@ -95,6 +96,9 @@ def mint(db: Session, *, tenant_id, subject_id, image: str,
     superseded = _active_for(db, subject_id=subject_id, purpose=purpose)
 
     if not using_bioverify():
+        if document:
+            raise ApiError(501, "DOCUMENT_NOT_SUPPORTED",
+                           "Document verification needs the BioVerify credential engine.")
         try:
             vector = get_face_engine().embed(image=image)
         except FaceEngineError as e:
@@ -106,7 +110,15 @@ def mint(db: Session, *, tenant_id, subject_id, image: str,
         return cred, None
 
     try:
-        result = get_bioverify().enrol(image=image, expires_in_s=_ttl_seconds(expires_at))
+        if document:
+            # Both images go in ONE call: the service matches the live face against the photo
+            # on the document, then enrols the LIVE face. The document is destroyed and never
+            # stored — by them or by us.
+            result = get_bioverify().enrol_with_document(
+                live=image, document=document, document_type=document_type,
+                expires_in_s=_ttl_seconds(expires_at))
+        else:
+            result = get_bioverify().enrol(image=image, expires_in_s=_ttl_seconds(expires_at))
     except BioVerifyRefused as e:
         # The service worked and declined THIS capture. That is the person's to fix, so it is a
         # 422 carrying the reason — not a 503, which would tell them the system is broken and
