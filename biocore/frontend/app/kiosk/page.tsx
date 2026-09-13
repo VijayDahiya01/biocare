@@ -1,9 +1,14 @@
 "use client";
 // K1 — Kiosk self-service terminal. Two modes:
-//  • Check-in: always-on face scanner (/faces/search), auto-reset.
+//  • Check-in: always-on walk-up 1:N face scanner (/entry/identify), auto-reset.
 //  • Verified entry (§11.3): enter a pass/id → live capture → 1:1 match + authorization
 //    decision (/entry). Device-authenticated; frames are never stored, auto-resets.
 // Shares the light "terminal" look with the guard console (guard.css).
+//
+// NOTE: /entry/identify's authorization.evaluate() call does not pass a `blacklisted`
+// argument today, so blacklist screening does not run on this path even though the
+// plumbing (authorization.evaluate(blacklisted=...)) exists — a pre-existing gap in the
+// BioVerify walk-up flow, not something this file can fix on its own.
 import "../guard/guard.css";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -14,11 +19,6 @@ type Result = { kind: "in" | "out" | "bad" | "unknown"; icon: string; label: str
 type Mode = "checkin" | "entry";
 const RESET_MS = 3500, SCAN_MS = 1500;
 
-const fmtDur = (m: number | null | undefined) => {
-  if (m == null) return "";
-  const h = Math.floor(m / 60), mm = m % 60;
-  return h ? `${h}h ${mm}m` : `${mm}m`;
-};
 // privacy-safe messages (§11.3) — never reveal internal thresholds/rules.
 const REASON_MSG: Record<string, string> = {
   ALLOWED: "Access granted",
@@ -38,6 +38,7 @@ function Kiosk() {
   const { videoRef, ready, error, start, capture } = useCamera();
   const [token, setToken] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("checkin");
+  const [direction, setDirection] = useState<"in" | "out">("in");
   const [result, setResult] = useState<Result | null>(null);
   const [status, setStatus] = useState("Look at the camera");
   const [count, setCount] = useState(0);
@@ -66,11 +67,10 @@ function Kiosk() {
     busy.current = true; setStatus("Scanning…");
     const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     try {
-      const d = await deviceSearch("/faces/search", token, { image, action: "auto" });
-      if (d.blacklist_hit) setResult({ kind: "bad", icon: "⚠", label: "Blacklist hit", big: "Do not admit", meta: "Alert sent to security" });
-      else if (!d.match) setResult({ kind: "unknown", icon: "?", label: "No match", big: "Not recognised", meta: "Please see reception" });
-      else if (d.event === "check_in") setResult({ kind: "in", icon: "✓", label: "Checked in", big: "Welcome", name: d.name, meta: `${t} · ${(d.score * 100).toFixed(0)}% match` });
-      else setResult({ kind: "out", icon: "✓", label: "Checked out", big: "Goodbye", name: d.name, meta: `${t}${d.duration_minutes != null ? " · " + fmtDur(d.duration_minutes) : ""}` });
+      const d = await deviceSearch("/entry/identify", token, { image, direction });
+      if (!d.matched) setResult({ kind: "unknown", icon: "?", label: "No match", big: "Not recognised", meta: REASON_MSG[d.reason] || "Please see reception" });
+      else if (d.decision === "allow") setResult({ kind: direction, icon: "✓", label: direction === "in" ? "Checked in" : "Checked out", big: direction === "in" ? "Welcome" : "Goodbye", name: d.name, meta: t });
+      else setResult({ kind: "bad", icon: "✕", label: "Access denied", big: "Entry denied", name: d.name, meta: REASON_MSG[d.reason] || d.reason });
       setCount((c) => c + 1);
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "";
@@ -78,7 +78,7 @@ function Kiosk() {
       else if (code === "IMAGE_QUALITY_FAILED") setStatus("Hold still — move a little closer");
       else setStatus("Try again");
     } finally { busy.current = false; }
-  }, [token, ready, result, capture, mode]);
+  }, [token, ready, result, capture, mode, direction]);
 
   useEffect(() => { const id = setInterval(scan, SCAN_MS); return () => clearInterval(id); }, [scan]);
 
@@ -154,6 +154,15 @@ function Kiosk() {
               </div>
             ) : mode === "checkin" ? (
               <div className="gd-hero idle">
+                <div style={{ display: "flex", gap: 4, background: "var(--violet-tint)", borderRadius: 999, padding: 3, margin: "0 auto 14px", width: "fit-content" }}>
+                  {(["in", "out"] as const).map((d) => (
+                    <button key={d} onClick={() => setDirection(d)}
+                            style={{ border: 0, borderRadius: 999, padding: "6px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                                     background: direction === d ? "#fff" : "transparent", color: direction === d ? "var(--violet)" : "var(--muted)" }}>
+                      {d === "in" ? "Check-in" : "Check-out"}
+                    </button>
+                  ))}
+                </div>
                 <div className="gd-rring" />
                 <div className="gd-rbig">Look at the camera</div>
                 <div className="gd-rmeta">{status === "Look at the camera" ? "Checking in is automatic — just look ahead" : status}</div>
