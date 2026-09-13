@@ -10,7 +10,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.adapters.zepiris import get_zepiris
+from app.adapters.zepiris import ZepIrisError, get_zepiris
+from app.core.envelope import ApiError
 from app.models import BlacklistEntry
 
 BLACKLIST_PREFIX = "blacklist:"
@@ -19,7 +20,12 @@ BLACKLIST_PREFIX = "blacklist:"
 def add(db: Session, *, tenant_id: str, image_b64: str, reason: str | None,
         added_by: str) -> dict:
     face_id = f"{BLACKLIST_PREFIX}{uuid.uuid4()}"
-    get_zepiris().insert(tenant=tenant_id, face_id=face_id, image_b64=image_b64)
+    try:
+        get_zepiris().insert(tenant=tenant_id, face_id=face_id, image_b64=image_b64)
+    except ZepIrisError as e:
+        if e.code == "LEGACY_ENGINE_RETIRED":
+            raise ApiError(e.status_code, e.code, e.message)
+        raise ApiError(502, "FACE_ENGINE_ERROR", "Face engine unavailable.")
     entry = BlacklistEntry(
         tenant_id=tenant_id, milvus_vector_id=face_id, reason=reason,
         added_by=added_by,

@@ -24,12 +24,16 @@ def enroll_face(db: Session, *, tenant_id: str, user_id: str, image_b64: str,
         raise ApiError(404, "USER_NOT_FOUND", "User does not exist in this tenant.")
 
     face_id = str(user_id)  # stable ZepIris id per user
-    z = get_zepiris()
 
     # 2. enroll into ZepIris (insert; if the id already exists, re-enroll via upsert).
     try:
+        z = get_zepiris()
         result = z.insert(tenant=tenant_id, face_id=face_id, image_b64=image_b64)
     except ZepIrisError as e:
+        if e.code == "LEGACY_ENGINE_RETIRED":
+            # get_zepiris() itself raises this when the engine isn't deployed at all —
+            # pass it straight through instead of the per-call mapping below.
+            raise ApiError(e.status_code, e.code, e.message)
         if e.status_code == 409:
             result = z.upsert(tenant=tenant_id, face_id=face_id, image_b64=image_b64)
         elif e.status_code == 422:

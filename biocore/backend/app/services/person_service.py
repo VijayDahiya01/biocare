@@ -212,7 +212,12 @@ def consent_for_business(db: Session, *, person_id: str, membership_id: str,
             raise ApiError(500, "MASTER_FACE_MISSING", "Master template unavailable.")
 
         tenant_id = str(u.tenant_id)
-        get_zepiris().insert(tenant=tenant_id, face_id=str(u.id), image_b64=image)  # re-provision
+        try:
+            get_zepiris().insert(tenant=tenant_id, face_id=str(u.id), image_b64=image)  # re-provision
+        except ZepIrisError as e:
+            if e.code == "LEGACY_ENGINE_RETIRED":
+                raise ApiError(e.status_code, e.code, e.message)
+            raise ApiError(502, "FACE_ENGINE_ERROR", "Face engine unavailable.")
 
         ref = f"CNS-{datetime.now(timezone.utc).year}-{secrets.randbelow(100000):05d}"
         db.add(ConsentRecord(
@@ -296,7 +301,12 @@ def _ensure_face_provisioned(db: Session, u: User, person_id: str) -> bool:
     image = face_vault.load(object_key)
     if not image:
         return False
-    get_zepiris().insert(tenant=str(u.tenant_id), face_id=str(u.id), image_b64=image)
+    try:
+        get_zepiris().insert(tenant=str(u.tenant_id), face_id=str(u.id), image_b64=image)
+    except ZepIrisError as e:
+        if e.code == "LEGACY_ENGINE_RETIRED":
+            raise ApiError(e.status_code, e.code, e.message)
+        raise ApiError(502, "FACE_ENGINE_ERROR", "Face engine unavailable.")
     db.add(FaceRecord(tenant_id=u.tenant_id, user_id=u.id, milvus_vector_id=str(u.id),
                       is_active=True, enrolled_by="person_reuse"))
     return True

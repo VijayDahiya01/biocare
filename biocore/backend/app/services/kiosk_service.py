@@ -24,13 +24,18 @@ from app.services.ppe_logic import evaluate_ppe
 def _search_match(db: Session, device: DeviceContext, image_b64: str) -> User:
     """Shared: ZepIris search + quality gates -> the matched active User.
     Raises ApiError (spoof/quality) or returns the User. Used by scan + break."""
-    z = get_zepiris()
     try:
+        z = get_zepiris()
         result = z.search(
             tenant=device.tenant_id, image_b64=image_b64,
             top_k=5, threshold=settings.match_threshold,
         )
     except ZepIrisError as e:
+        if e.code == "LEGACY_ENGINE_RETIRED":
+            # get_zepiris() itself raises this (e.g. LEGACY_ENGINE_RETIRED) when the
+            # engine isn't deployed at all — a real, actionable status, not a search
+            # failure, so pass it straight through instead of remapping it below.
+            raise ApiError(e.status_code, e.code, e.message)
         if e.status_code == 400:
             raise ApiError(400, "BAD_IMAGE", "The frame could not be read.")
         raise ApiError(502, "FACE_ENGINE_ERROR", "Face engine unavailable.")
@@ -60,13 +65,15 @@ def process_break(db: Session, *, device: DeviceContext, image_b64: str,
 
 def process_scan(db: Session, *, device: DeviceContext, image_b64: str,
                  action: str, request_id: str | None) -> dict:
-    z = get_zepiris()
     try:
+        z = get_zepiris()
         result = z.search(
             tenant=device.tenant_id, image_b64=image_b64,
             top_k=5, threshold=settings.match_threshold,
         )
     except ZepIrisError as e:
+        if e.code == "LEGACY_ENGINE_RETIRED":
+            raise ApiError(e.status_code, e.code, e.message)
         if e.status_code == 400:
             raise ApiError(400, "BAD_IMAGE", "The frame could not be read.")
         raise ApiError(502, "FACE_ENGINE_ERROR", "Face engine unavailable.")
