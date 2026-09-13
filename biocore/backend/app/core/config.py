@@ -130,6 +130,10 @@ class Settings(BaseSettings):
     offline_roster_max_subjects: int = 5000     # sanity cap on roster size
     # Business integration connectors (§19.2). Fake (in-memory) by default for dev; real
     # per-vendor connectors implement the Protocols and register when their access is provisioned.
+    # Whether this deployment uses business integrations (HR roster sync, event push) at all.
+    # Off by default: most do not, and a deployment that never calls a connector is not made
+    # unsafe by the stand-in existing. Turn it on only with real connectors configured.
+    connectors_enabled: bool = False
     fake_connectors: bool = True
     # Local hardware bridge (§19.3) — receives only allow/deny + signed context, never a template.
     hardware_bridge_enabled: bool = False

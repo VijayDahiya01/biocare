@@ -5,7 +5,7 @@ bypass_rls() but ALWAYS hard-filters to the authenticated person_id / their emai
 and audits the access — the data subject reading their own data, never anyone else.
 """
 import secrets
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -50,9 +50,14 @@ def resolve_or_create_person(db: Session, *, email: str) -> str:
         p = db.execute(select(Person).where(Person.email == email)).scalar_one_or_none()
         if not p:
             u = db.execute(select(User).where(User.email == email).limit(1)).scalar_one_or_none()
+            # No name has been given yet. The email prefix is a PLACEHOLDER so the row can
+            # exist; `profile_completed_at` stays null until the person tells us who they are,
+            # and nothing should show this to a guard or match it against a government record.
             p = Person(email=email,
                        first_name=(u.first_name if u else email.split("@")[0]),
-                       last_name=(u.last_name if u else None))
+                       last_name=(u.last_name if u else None),
+                       profile_completed_at=(datetime.now(timezone.utc) if u and u.first_name
+                                             else None))
             db.add(p)
             db.flush()
         db.execute(
@@ -96,6 +101,11 @@ def profile(db: Session, person_id: str) -> dict:
     return {
         "person_id": person_id,
         "name": f"{p.first_name} {p.last_name or ''}".strip(),
+        "gender": p.gender,
+        "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else None,
+        # False while `first_name` is still the placeholder taken from the email address.
+        # The app uses this to ask for real details before anything depends on them.
+        "profile_complete": p.profile_completed_at is not None,
         "email": p.email,
         "phone": p.phone,
         "face_verified": has_master_face(db, person_id) or any(
@@ -412,3 +422,39 @@ def accept_invite(db: Session, *, person_id: str, email: str | None, invite_id: 
                     target_id=mid, request_id=request_id)
         db.commit()
     return {"membership_id": mid, "business": t.name, "sector": t.vertical, "status": "pending_face"}
+
+
+def update_profile(db: Session, *, person_id: str, first_name: str, last_name: str | None,
+                   gender: str | None, date_of_birth: str | None, phone: str | None) -> dict:
+    """The person tells us who they actually is — name, and optionally gender, DOB, phone.
+
+    Until this runs, `first_name` is a placeholder taken from their email address. A guard
+    reading a name off a gate screen, and any comparison against a government record, both
+    depend on this being real.
+    """
+    with bypass_rls(db):
+        p = db.get(Person, person_id)
+        if not p:
+            raise ApiError(404, "PERSON_NOT_FOUND", "No such person.")
+        name = (first_name or "").strip()
+        if len(name) < 2:
+            raise ApiError(400, "NAME_REQUIRED", "Please give your full name.")
+        dob = None
+        if date_of_birth:
+            try:
+                dob = date.fromisoformat(date_of_birth)
+            except ValueError:
+                raise ApiError(400, "DOB_INVALID", "Date of birth should look like 1990-04-23.")
+            today = date.today()
+            years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            if not 0 < years < 120:
+                raise ApiError(400, "DOB_INVALID", "That date of birth does not look right.")
+        p.first_name = name
+        p.last_name = (last_name or "").strip() or None
+        p.gender = (gender or "").strip() or None
+        p.date_of_birth = dob
+        if phone and phone.strip():
+            p.phone = phone.strip()
+        p.profile_completed_at = datetime.now(timezone.utc)
+        db.commit()
+    return profile(db, person_id)

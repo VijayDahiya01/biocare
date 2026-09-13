@@ -15,6 +15,7 @@ from app.adapters.gov_identity.base import (
     GovSession,
     VerifiedClaims,
 )
+from app.core.name_match import compare_names
 
 
 class FakeGovernmentProvider:
@@ -37,14 +38,35 @@ class FakeGovernmentProvider:
 
     def extract_allowed_claims(self, *, raw: dict, context: dict) -> VerifiedClaims:
         ref_hash = hashlib.sha256(f"{raw.get('session_ref')}:{raw.get('reference')}".encode()).hexdigest()
+        # Mirror the real provider: compare the name we hold against the one the record
+        # returns. A fake that always says "name verified" would make a broken comparison
+        # look correct in every test.
+        expected = str(context.get("expected_name") or "").strip()
+        official = str(context.get("fake_government_name") or expected)
+        if expected:
+            verdict = compare_names(expected, official)
+            name_ok, name_reason = verdict.matched, verdict.reason
+        else:
+            name_ok, name_reason = False, "no name on file to compare against"
         return VerifiedClaims(
-            identity_verified=True, name_verified=True, document_valid=True,
+            identity_verified=True, name_verified=name_ok, document_valid=True,
             age_over_18=True, assurance_level="fake_dev", verification_reference_hash=ref_hash,
+            extra={"name_match_reason": name_reason},
         )
 
     def extract_temporary_photo(self, *, raw: dict) -> bytes | None:
         # A real provider returns the actual government face here; the fake returns a marker.
         return b"FAKE_GOV_PHOTO"
+
+    def aadhaar_okyc_send_otp(self, *, aadhaar_number: str, reason: str = "") -> str:
+        """Step 1 of the real flow, simulated. UIDAI would send a code to the mobile registered
+        against that Aadhaar; nothing is sent here and any six digits will verify. The fake
+        performs the SAME two steps as the real provider — a one-step fake would let a broken
+        two-step integration look correct in every test."""
+        digits = "".join(c for c in (aadhaar_number or "") if c.isdigit())
+        if len(digits) != 12:
+            raise GovernmentIdentityError("An Aadhaar number is 12 digits.", "invalid_request")
+        return f"fake-ref-{digits[-4:]}"
 
     def revoke_or_close_session(self, *, session: GovSession) -> None:
         return None

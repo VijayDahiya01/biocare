@@ -47,6 +47,12 @@ class StartVerify(BaseModel):
 class CompleteVerify(BaseModel):
     reference: str = ""
     image: str
+    document: str | None = None      # required when the org asks for one
+    document_type: str = "PASSPORT"
+    # Aadhaar is a two-step check: send the number to get a code on the registered mobile,
+    # then verify with the reference and that code. The number itself never reaches this call.
+    gov_reference_id: str | None = None
+    gov_otp: str | None = None
 
 
 class RetentionPolicyBody(BaseModel):
@@ -55,3 +61,8 @@ class RetentionPolicyBody(BaseModel):
     expiry_trigger: str | None = None      # e.g. "event_end", "checkout", "employment_end"
     deletion_method: str = "hard_delete"
     legal_hold_allowed: bool = True
+
+
+class GovOtpRequest(BaseModel):
+    """Step 1 of an Aadhaar check — the number is used once and never stored."""
+    aadhaar_number: str

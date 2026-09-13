@@ -18,6 +18,7 @@ export default function SettingsPage() {
   const [dpo, setDpo] = useState("");
   const [retention, setRetention] = useState("1095");
   const [threshold, setThreshold] = useState("0.5");
+  const [level, setLevel] = useState("face_only");
   const [hook, setHook] = useState({ event: EVENTS[0], url: "", secret: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export default function SettingsPage() {
       setDpo(cfg.dpdp?.dpo_email || "");
       setRetention(String(cfg.dpdp?.retention_days ?? 1095));
       setThreshold(String(cfg.settings?.match_threshold ?? 0.5));
+      setLevel(cfg.verification_level ?? "face_only");
     } catch (e) { if (e instanceof ApiError && e.status === 401) router.push("/admin/login"); }
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
@@ -45,6 +47,7 @@ export default function SettingsPage() {
         branding: { display_name: displayName, primary_color: color },
         dpdp: { dpo_email: dpo, retention_days: Number(retention) },
         match_threshold: Number(threshold),
+        verification_level: level,
       }});
       setMsg("Saved.");
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Failed"); }
@@ -79,6 +82,20 @@ export default function SettingsPage() {
           <input value={dpo} onChange={(e) => setDpo(e.target.value)} placeholder="privacy@acme.com" />
           <label>Retention (days)</label>
           <input type="number" value={retention} onChange={(e) => setRetention(e.target.value)} />
+          <label htmlFor="vlevel">What people must provide to register</label>
+          <select id="vlevel" value={level} onChange={(e) => setLevel(e.target.value)}>
+            <option value="face_only">A selfie only</option>
+            <option value="face_and_document">A selfie and a photo ID</option>
+            <option value="face_and_government">A selfie checked against government records</option>
+          </select>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {level === "face_only"
+              ? "Fastest to join. Confirms the same person returns — not who they are."
+              : level === "face_and_document"
+              ? "Checks the face against the photo on their ID. Note it cannot tell a forged document from a real one."
+              : "Strongest. Requires government KYC to be switched on."}
+          </p>
+
           <label>Match threshold (0–1)</label>
           <input type="number" step="0.01" min="0" max="1" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
           {msg && <div className="muted" style={{ color: "#166534", marginTop: 10 }}>{msg}</div>}

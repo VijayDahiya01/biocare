@@ -25,6 +25,7 @@ from app.schemas.person import (
     PersonFaceEnroll,
     PersonOtpRequest,
     PersonOtpVerify,
+    ProfileUpdate,
 )
 from app.services import person_service
 
@@ -81,6 +82,17 @@ def logout(request: Request, principal: PersonPrincipal = Depends(get_person)):
 def me(request: Request, principal: PersonPrincipal = Depends(get_person),
        db: Session = Depends(person_db)):
     return success(request, person_service.profile(db, principal.person_id))
+
+
+@router.patch("/me")
+def update_me(request: Request, body: ProfileUpdate,
+              principal: PersonPrincipal = Depends(get_person),
+              db: Session = Depends(person_db)):
+    """The person fills in their own details. Nobody else can edit them."""
+    return success(request, person_service.update_profile(
+        db, person_id=principal.person_id, first_name=body.first_name,
+        last_name=body.last_name, gender=body.gender,
+        date_of_birth=body.date_of_birth, phone=body.phone))
 
 
 @router.get("/businesses")

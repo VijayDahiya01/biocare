@@ -47,8 +47,9 @@ def record_consent(db: Session, *, tenant_id, tenant_subject_id, purpose: str,
 
 def run_government_fetch(db: Session, *, session: IdentityVerificationSession,
                          subject_ref: str, credential: dict,
-                         face_compare: Callable[[bytes, bytes], tuple[bool, str]] | None = None,
-                         live_vector: bytes | None = None):
+                         face_compare: Callable[..., tuple[bool, str]] | None = None,
+                         live_vector: bytes | None = None,
+                         live_image: str | None = None):
     """Call the government adapter, retain ONLY minimal claims, delete temporary material.
 
     Consent for `identity_verification` + `government_data_processing` must already be on
@@ -69,8 +70,9 @@ def run_government_fetch(db: Session, *, session: IdentityVerificationSession,
     # --- temporary material (used, NEVER stored/logged): government photo + embeddings ---
     gov_photo = result.government_photo
     claims = result.claims
-    if face_compare is not None and live_vector is not None and gov_photo is not None:
-        matched, detail = face_compare(gov_photo, live_vector)
+    live = live_image if live_image is not None else live_vector
+    if face_compare is not None and live is not None and gov_photo is not None:
+        matched, detail = face_compare(gov_photo, live)
         session.face_match_result = "passed" if matched else "failed"
         session.liveness_result = detail
 

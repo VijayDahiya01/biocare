@@ -31,7 +31,10 @@ def production_problems() -> list[str]:
                        (settings.fake_bioverify, "FAKE_BIOVERIFY"),
                        (settings.fake_gov_identity, "FAKE_GOV_IDENTITY"),
                        (settings.fake_redis, "FAKE_REDIS"),
-                       (settings.fake_connectors, "FAKE_CONNECTORS")):
+                       # Only a problem when connectors are actually in use: a stand-in that
+                       # nothing ever calls is not answering for anything.
+                       (settings.fake_connectors and settings.connectors_enabled,
+                        "FAKE_CONNECTORS")):
         if flag:
             problems.append(f"{name}=true — a stand-in is answering instead of the real service. "
                             f"Set {name}=false.")
