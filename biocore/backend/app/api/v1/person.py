@@ -20,6 +20,7 @@ from app.core.sessions import (
     set_session_cookies,
 )
 from app.dpdp.audit import write_audit
+from app.models import Person
 from app.schemas.person import (
     JoinByCode,
     PersonFaceEnroll,
@@ -47,7 +48,14 @@ def otp_verify(request: Request, body: PersonOtpVerify, db: Session = Depends(ge
     # audit writes under no tenant; commit via a bypass scope
     with bypass_rls(db):
         db.commit()
-    resp = success(request, {"person_id": person_id})
+    # Tell the app whether this person has ever given us their details, so it can send a
+    # first-time visitor to fill them in instead of dropping them on a hub that does not know
+    # their name. Saying so AFTER the code is verified leaks nothing: only the owner of the
+    # inbox ever sees it, so it cannot be used to discover which emails are registered.
+    with bypass_rls(db):
+        person = db.get(Person, person_id)
+    resp = success(request, {"person_id": person_id,
+                             "profile_complete": bool(person and person.profile_completed_at)})
     set_session_cookies(resp, sid, csrf, ttl)
     return resp
 

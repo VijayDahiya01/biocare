@@ -21,8 +21,11 @@ export default function PersonLogin() {
         await api("/person/auth/otp/request", { method: "POST", body: { email: email.trim() } });
         setSent(true);
       } else {
-        await api("/person/auth/otp/verify", { method: "POST", body: { email: email.trim(), otp: otp.trim() } });
-        router.push("/member");
+        const d = await api<{ profile_complete: boolean }>("/person/auth/otp/verify",
+          { method: "POST", body: { email: email.trim(), otp: otp.trim() } });
+        // First time here: ask who they are before dropping them on a hub that cannot greet
+        // them. Coming back: straight in.
+        router.push(d.profile_complete ? "/member" : "/member/profile?welcome=1");
       }
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Sign-in failed");
@@ -46,13 +49,16 @@ export default function PersonLogin() {
         <div className="logo">B</div>
         <h1 className="app-h1">One app for every<br />place you belong to</h1>
         <p className="app-sub">Set up your face at each place — then walk in with just your face. No cards, no queues.</p>
+        <p className="app-sub" style={{ marginTop: 6, opacity: .85 }}>
+          New or returning — same door. We email you a code; there is no password to remember.
+        </p>
       </div>
       <form className="app-card" onSubmit={submit}>
         <label className="app-label">Email address</label>
         <input className="app-field" type="email" inputMode="email" value={email}
                onChange={(e) => setEmail(e.target.value)} disabled={sent} placeholder="you@email.com" required />
         {sent && (<>
-          <label className="app-label">Enter the code we emailed you</label>
+          <label className="app-label">Enter the code we emailed to {email.trim()}</label>
           <input className="app-field" value={otp} onChange={(e) => setOtp(e.target.value)}
                  inputMode="numeric" placeholder="6-digit code" required />
         </>)}

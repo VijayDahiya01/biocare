@@ -23,7 +23,10 @@ export default function MyDetailsPage() {
 
 function MyDetails() {
   const router = useRouter();
-  const next = useSearchParams().get("next");
+  const params = useSearchParams();
+  const next = params.get("next");
+  // Straight after a first sign-in this is an introduction, not an edit form.
+  const welcome = params.get("welcome") === "1";
 
   const [f, setF] = useState({ first_name: "", last_name: "", gender: "",
                                date_of_birth: "", phone: "" });
@@ -61,10 +64,12 @@ function MyDetails() {
 
   return (
     <div>
-      <a className="app-back" href="/member">← Home</a>
-      <h1 className="app-h1">Your details</h1>
+      {!welcome && <a className="app-back" href="/member">← Home</a>}
+      <h1 className="app-h1">{welcome ? "Welcome — who are you?" : "Your details"}</h1>
       <p className="app-sub">
-        This is the name a gate shows when it recognises you. Only you can change it.
+        {welcome
+          ? "Just your name to start. This is what a gate shows when it recognises you, and only you can change it."
+          : "This is the name a gate shows when it recognises you. Only you can change it."}
       </p>
 
       <form className="app-card" style={{ marginTop: 14 }} onSubmit={save}>
@@ -93,7 +98,7 @@ function MyDetails() {
         {err && <div className="app-err">{err}</div>}
         <button className="btn primary" type="submit" disabled={busy || f.first_name.trim().length < 2}
                 style={{ width: "100%", marginTop: 16 }}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? "Saving…" : welcome ? "Continue" : "Save"}
         </button>
       </form>
     </div>
