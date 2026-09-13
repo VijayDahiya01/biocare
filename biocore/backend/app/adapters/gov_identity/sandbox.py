@@ -30,6 +30,7 @@ from app.adapters.gov_identity.base import (
     VerifiedClaims,
 )
 from app.core.config import settings
+from app.core.name_match import compare_names
 
 
 def _age_over_18(dob: str | None) -> bool:
@@ -154,10 +155,21 @@ class SandboxGovernmentProvider:
         if raw.get("_type") == "aadhaar":
             name = raw.get("name") or raw.get("full_name") or ""
             dob = raw.get("date_of_birth") or raw.get("dob") or ""
+            # Aadhaar returns the REAL name, so check it against the one the person gave us.
+            # This used to be `bool(name)` — merely "a name came back" — which confirmed
+            # nothing: someone could register as anybody and still pass.
+            expected = str(context.get("expected_name") or "").strip()
+            if expected:
+                verdict = compare_names(expected, name)
+                name_ok, name_reason = verdict.matched, verdict.reason
+            else:
+                name_ok, name_reason = False, "no name on file to compare against"
             return VerifiedClaims(
-                identity_verified=True, name_verified=bool(name), document_valid=True,
+                identity_verified=True, name_verified=name_ok, document_valid=True,
                 age_over_18=_age_over_18(dob), assurance_level="sandbox_aadhaar_okyc",
-                verification_reference_hash=ref, extra={"gender": raw.get("gender")})
+                verification_reference_hash=ref,
+                # The government name itself is NOT retained — only the verdict (§5.5).
+                extra={"gender": raw.get("gender"), "name_match_reason": name_reason})
         # PAN — confirmed live schema: status "valid", name_as_per_pan_match, date_of_birth_match,
         # category, aadhaar_seeding_status ("y"/"n"). Tolerant of status variants.
         status = str(raw.get("status", "")).upper()

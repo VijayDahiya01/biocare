@@ -29,7 +29,8 @@ def complete(request: Request, membership_id: str, body: CompleteVerify,
     return success(request, person_identity_service.complete_verification(
         db, person_id=principal.person_id, membership_id=membership_id,
         reference=body.reference, image=body.image, request_id=request.state.request_id,
-        document=body.document, document_type=body.document_type))
+        document=body.document, document_type=body.document_type,
+        government_id=body.government_id))
 
 
 @router.get("/{membership_id}/status")

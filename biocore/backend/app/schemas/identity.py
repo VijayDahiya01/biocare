@@ -49,6 +49,7 @@ class CompleteVerify(BaseModel):
     image: str
     document: str | None = None      # required when the org asks for one
     document_type: str = "PASSPORT"
+    government_id: str | None = None  # Aadhaar/PAN number when the org asks for a gov check
 
 
 class RetentionPolicyBody(BaseModel):

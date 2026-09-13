@@ -14,7 +14,7 @@ const PURPOSES: [string, string, string][] = [
   ["entry_template_creation", "Set up face entry", "Create a secure face pass so I can get in."],
   ["entry_authentication", "Enter with my face", "Let me enter with my face at this business."],
 ];
-type Step = "consent" | "capture" | "document" | "done";
+type Step = "consent" | "capture" | "document" | "govid" | "done";
 
 export default function VerifyIdentity({ params }: { params: { membership: string } }) {
   const { membership } = params;
@@ -23,6 +23,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
   // What this organisation asks for: a selfie, or a selfie plus an identity document.
   const [level, setLevel] = useState<string>("face_only");
   const [selfie, setSelfie] = useState<string | null>(null);
+  const [govId, setGovId] = useState("");
   const [acks, setAcks] = useState<Record<string, boolean>>({});
   const [business, setBusiness] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,8 +32,11 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
   const acceptAll = () => setAcks(Object.fromEntries(PURPOSES.map(([k]) => [k, true])));
 
   const needsDoc = level === "face_and_document";
+  const needsGov = level === "face_and_government";
   const STEPS: [Step, string][] = needsDoc
     ? [["consent", "Agree"], ["capture", "Selfie"], ["document", "ID"], ["done", "Verified"]]
+    : needsGov
+    ? [["consent", "Agree"], ["capture", "Selfie"], ["govid", "Aadhaar"], ["done", "Verified"]]
     : [["consent", "Agree"], ["capture", "Selfie"], ["done", "Verified"]];
   const stepIdx = STEPS.findIndex(([s]) => s === step);
 
@@ -89,6 +93,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
     // The service matches the live face against the document photo in ONE call, so when a
     // document is required we hold the selfie and send both together at the end.
     if (needsDoc) setStep("document");
+    else if (needsGov) setStep("govid");
     else void complete(image, null);
   }
 
@@ -97,7 +102,9 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
     try {
       const d = await api<{ verified: boolean; outcome: string; qr_png_b64?: string }>(
         `/person/verify/${membership}/complete`,
-        { method: "POST", body: { reference: membership, image, document } });
+        { method: "POST",
+          body: { reference: membership, image, document,
+                  government_id: govId.replace(/\s/g, "") || null } });
       if (d.verified) {
         // Keep the pass on this device so it can be shown without a signal. This is a
         // convenience copy only — the real one lives on the server, and clearing site data
@@ -114,6 +121,7 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
     } catch (e) {
       setErr(captureAdvice(e));
       if (needsDoc) setStep("capture");   // start the pair again; a half-done pair is no use
+      else if (needsGov) setStep("govid"); // let them correct the number without re-taking the selfie
     } finally { setBusy(false); }
   }
 
@@ -180,6 +188,29 @@ export default function VerifyIdentity({ params }: { params: { membership: strin
           <p className="app-sub" style={{ marginTop: 10, fontSize: 12 }}>
             The picture of your document is used to check it is you, then destroyed. It is never
             stored.
+          </p>
+          {err && <div className="app-err">{err}</div>}
+        </div>
+      )}
+
+      {step === "govid" && (
+        <div className="app-card" style={{ marginTop: 14 }}>
+          <h2 style={{ margin: "0 0 4px", fontSize: 20 }}>Step 3 · Your Aadhaar number</h2>
+          <p className="app-sub">
+            {business || "This organisation"} checks your identity against government records.
+            We compare the name and photo held there with the ones you gave us.
+          </p>
+          <label htmlFor="govid">Aadhaar number</label>
+          <input id="govid" inputMode="numeric" autoComplete="off" placeholder="1234 5678 9012"
+                 value={govId} onChange={(e) => setGovId(e.target.value)} />
+          <button className="btn primary" style={{ width: "100%", marginTop: 14 }}
+                  disabled={busy || govId.replace(/\D/g, "").length !== 12}
+                  onClick={() => void complete(selfie || "", null)}>
+            {busy ? "Checking…" : "Verify me"}
+          </button>
+          <p className="app-sub" style={{ marginTop: 10, fontSize: 12 }}>
+            Your number is used for this one check and is not stored — only whether the name and
+            face matched.
           </p>
           {err && <div className="app-err">{err}</div>}
         </div>

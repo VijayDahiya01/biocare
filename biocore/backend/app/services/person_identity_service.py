@@ -6,9 +6,12 @@ their own membership — the data subject acting on their own record, never anyo
 membership resolves the tenant; a tenant_subject + the verified-identity flow are created in
 that tenant (keyed on the membership id).
 """
+import base64
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.adapters.face_engine import FaceEngineError, get_face_engine
 from app.core.db import bypass_rls
 from app.core.envelope import ApiError
 from app.core.policy import ConsentPurpose, VerificationOutcome
@@ -94,9 +97,30 @@ def start_verification(db: Session, *, person_id: str, membership_id: str,
                 "verification_level": t.verification_level or "face_only"}
 
 
+def _compare_to_government_photo(gov_photo: bytes, live_image: str) -> tuple[bool, str]:
+    """Match the live capture against the photo the government record returned.
+
+    Aadhaar OKYC returns a real face; the dev fake returns a marker, which cannot be matched
+    and must not be reported as a pass. Either way the photo is discarded immediately after —
+    it is never stored (§5.10).
+    """
+    if not gov_photo or gov_photo == b"FAKE_GOV_PHOTO":
+        return False, "no usable government photo (simulated record)"
+    try:
+        engine = get_face_engine()
+        stored = engine.embed(image=base64.b64encode(gov_photo).decode())
+        live = engine.embed(image=live_image)
+        result = engine.compare(stored=stored, live=live)
+        return result.matched, f"government photo {'matched' if result.matched else 'did not match'}"
+    except FaceEngineError as e:
+        # Cannot check. Report the failure rather than let an unchecked face read as verified.
+        return False, f"could not compare against the government photo: {e}"
+
+
 def complete_verification(db: Session, *, person_id: str, membership_id: str, reference: str,
                           image: str, request_id: str | None, document: str | None = None,
-                          document_type: str = "PASSPORT") -> dict:
+                          document_type: str = "PASSPORT",
+                          government_id: str | None = None) -> dict:
     with bypass_rls(db):
         u = _membership(db, person_id, membership_id)
         person = db.get(Person, person_id)
@@ -125,8 +149,36 @@ def complete_verification(db: Session, *, person_id: str, membership_id: str, re
         if document and level == "face_only":
             document = None          # not asked for: do not send it, do not process it
 
-        identity_proofing.run_government_fetch(db, session=s, subject_ref=reference,
-                                               credential={"reference": reference})
+        # The government check compares against what we already hold: the name the person
+        # gave us at sign-up, and — for Aadhaar, which returns a photo — their live face.
+        gov_claims = identity_proofing.run_government_fetch(
+            db, session=s, subject_ref=reference,
+            credential={"reference": reference, "expected_name": full_name,
+                        "government_id": government_id} if government_id else
+                       {"reference": reference, "expected_name": full_name},
+            face_compare=_compare_to_government_photo, live_image=image)
+
+        if level == "face_and_government":
+            # Only meaningful at this level: the other levels never contacted a government
+            # record, so there is nothing to have matched.
+            if not gov_claims.name_verified:
+                reason = (gov_claims.extra or {}).get("name_match_reason", "")
+                raise ApiError(409, "NAME_MISMATCH",
+                               "The name on your government record does not match the name on "
+                               "your account. Please check your details and try again.",
+                               details={"reason": reason})
+            if s.face_match_result == "failed":
+                detail = s.liveness_result or ""
+                if "simulated" in detail or "could not compare" in detail:
+                    # Nothing was actually checked. Blaming the person for a deployment that
+                    # is not wired to a real government record would be a lie, and they would
+                    # retry forever.
+                    raise ApiError(503, "GOVERNMENT_CHECK_UNAVAILABLE",
+                                   "Government verification is not available right now. This "
+                                   "is not a problem with your photo — please try later or "
+                                   "contact the organisation.", details={"reason": detail})
+                raise ApiError(409, "GOVERNMENT_FACE_MISMATCH",
+                               "Your face does not match the photo on your government record.")
         # Mint through the shared issuer so self-service and the operator path always agree on
         # which engine issued the credential (§15.1). Fails closed if no live face was captured,
         # so the self-service credential is genuine and will match at the gate.
