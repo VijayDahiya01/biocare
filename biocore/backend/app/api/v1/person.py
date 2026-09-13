@@ -12,7 +12,7 @@ from app.api.deps import PersonPrincipal, get_person, person_db
 from app.core.config import settings
 from app.core.db import bypass_rls, get_db
 from app.core.envelope import ApiError, success
-from app.core.otp import request_otp, verify_otp
+from app.core.otp import OtpRateLimited, request_otp, verify_otp
 from app.core.sessions import (
     clear_session_cookies,
     create_person_session,
@@ -35,7 +35,12 @@ router = APIRouter(prefix="/person", tags=["person-app"])
 
 @router.post("/auth/otp/request")
 def otp_request(request: Request, body: PersonOtpRequest):
-    return success(request, {"expires_in": request_otp(body.email)})
+    try:
+        return success(request, {"expires_in": request_otp(body.email)})
+    except OtpRateLimited:
+        raise ApiError(429, "OTP_RATE_LIMITED",
+                       "Too many codes requested for this address. Wait a few minutes and "
+                       "try again.")
 
 
 @router.post("/auth/otp/verify")
