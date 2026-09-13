@@ -161,11 +161,11 @@ Then edit `.env` — the shipped paths are **container-absolute** and must be ma
 for a native run:
 
 ```diff
--ML_SERVICE_NSFW_LOCAL_MODEL_PATH=/app/models/nsfw_model.pth
+-ML_SERVICE_NSFW_LOCAL_MODEL_PATH=/member/models/nsfw_model.pth
 +ML_SERVICE_NSFW_LOCAL_MODEL_PATH=models/nsfw_model.pth
--ML_SERVICE_SPOOF_LOCAL_MODEL_PATH=/app/models/spoof_model.pth
+-ML_SERVICE_SPOOF_LOCAL_MODEL_PATH=/member/models/spoof_model.pth
 +ML_SERVICE_SPOOF_LOCAL_MODEL_PATH=models/spoof_model.pth
--ML_SERVICE_BLUR_LOCAL_MODEL_PATH=/app/models/blur_model.pth
+-ML_SERVICE_BLUR_LOCAL_MODEL_PATH=/member/models/blur_model.pth
 +ML_SERVICE_BLUR_LOCAL_MODEL_PATH=models/blur_model.pth
 ```
 
@@ -358,8 +358,8 @@ It lists `/v1/spoof` and `/v1/blur`. The real paths are namespaced:
 
 ### 8.3 The models volume mount is a live bug
 
-`biocore/docker-compose.yml:87` mounts `./infra/models:/app/models:ro`, but
-`ml_inference.Dockerfile` already does `COPY models/ /app/models/`. Since
+`biocore/docker-compose.yml:87` mounts `./infra/models:/member/models:ro`, but
+`ml_inference.Dockerfile` already does `COPY models/ /member/models/`. Since
 `biocore/infra/models/` contains **only a README**, that read-only mount would **mask the
 baked-in weights** → all ML endpoints return `503` and `/readyz` never passes.
 **Delete the mount** when building from source.

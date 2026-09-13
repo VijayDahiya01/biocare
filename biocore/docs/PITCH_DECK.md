@@ -261,7 +261,7 @@ platform; we're raising to put it in front of the first ‹N› customers."
 
 ## A1 — Live demo script (~60–90s)
 Your working product is your best slide. Suggested flow:
-1. **User app** (`/app/login`) → "Dev sign in" → hub: one identity, the places they
+1. **User app** (`/member/login`) → "Dev sign in" → hub: one identity, the places they
    belong, verification status, badges, check-in history. → open a business → events
    & per-event consent. *("The person owns their identity and consent.")*
 2. **Guard console** (`/guard`) → live face in the circle → **Welcome / Goodbye**

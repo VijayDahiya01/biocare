@@ -52,11 +52,11 @@ clean icon set.**
 
 ## 5. Navigation map
 ```
-/app/login ─▶ /app (Hub)
-                 ├─▶ /app/verify           (one-time face capture)
-                 ├─▶ /app/join             (enter org code)
-                 └─▶ /app/b/{membership}   (a business)
-                        └─▶ /app/b/{membership}/events
+/member/login ─▶ /member (Hub)
+                 ├─▶ /member/verify           (one-time face capture)
+                 ├─▶ /member/join             (enter org code)
+                 └─▶ /member/b/{membership}   (a business)
+                        └─▶ /member/b/{membership}/events
 ```
 Suggested chrome: a top app bar (brand + Sign out) on all signed-in screens.
 Optional (designer's call): a bottom tab bar on mobile (Home · Verify · Privacy).
@@ -65,7 +65,7 @@ Optional (designer's call): a bottom tab bar on mobile (Home · Verify · Privac
 
 ## 6. Screens
 
-### S1 — Login  `/app/login`
+### S1 — Login  `/member/login`
 **Purpose:** sign in as a person (email + one-time code). Full-screen hero, no app bar.
 **Fields/UI:** email input; after "Send code" → OTP input + "Sign in". A secondary
 "Dev sign in" exists for testing (hide in production design).
@@ -74,7 +74,7 @@ Optional (designer's call): a bottom tab bar on mobile (Home · Verify · Privac
 - `POST /person/auth/otp/verify` body `{ "email", "otp": "123456" }` → `{ "person_id" }` (sets session)
 **States:** default · code-sent (email locked, OTP shown) · error (`OTP_INVALID`) · busy.
 
-### S2 — Hub (home)  `/app`
+### S2 — Hub (home)  `/member`
 **Purpose:** the person's dashboard.
 **API (load all three):**
 - `GET /person/me` → `{ name, email, phone, face_verified: bool, business_count: int }`
@@ -88,7 +88,7 @@ Optional (designer's call): a bottom tab bar on mobile (Home · Verify · Privac
   icon, business name, role, and pills (status + face-here). Tap → S5. A **"+ Join"** action → S4.
 - **Empty state:** "You haven't joined any place yet" + Join CTA.
 
-### S3 — Verify face (one-time)  `/app/verify`
+### S3 — Verify face (one-time)  `/member/verify`
 **Purpose:** capture the master face once (consent-gated). Reused everywhere after.
 **UI:** 4 **consent toggles** (purpose, sensitivity, rights, freely-given) — camera
 disabled until all 4 ticked; then a **camera view** + "Capture my face".
@@ -97,12 +97,12 @@ disabled until all 4 ticked; then a **camera view** + "Capture my face".
 (→ Hub) · error `IMAGE_QUALITY_FAILED` ("too blurry / no face — retry"). Design a
 clear camera framing guide (face ring).
 
-### S4 — Join a business  `/app/join`
+### S4 — Join a business  `/member/join`
 **Purpose:** join by organisation code.
 **API:** `POST /person/businesses/join` body `{ "org_code": "ACME-2026" }` → `{ membership_id, business, sector, status: "pending_face" }`
 **States:** default · busy · error (`INVALID_ORG_CODE`, `ALREADY_MEMBER`). On success → Hub.
 
-### S5 — Business detail  `/app/b/{membership_id}`
+### S5 — Business detail  `/member/b/{membership_id}`
 **Purpose:** everything about the person **inside one business**.
 **API:** `GET /person/businesses/{membership_id}` →
 ```json
@@ -121,7 +121,7 @@ clear camera framing guide (face ring).
 - A **tile linking to Events** → S6.
 - **My check-in history** as a list (event pill + datetime). Empty state: "No check-ins yet."
 
-### S6 — Events  `/app/b/{membership_id}/events`
+### S6 — Events  `/member/b/{membership_id}/events`
 **Purpose:** the business's events + per-event registration/consent.
 **API:**
 - `GET /person/businesses/{membership_id}/events` → `{ items: [ { event_id, name, registered: bool, consented: bool } ] }`

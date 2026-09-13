@@ -36,15 +36,14 @@ DigitalOcean droplet.
                  ┌───────▼──────┐  ┌────▼────────────────┐
                  │ Managed      │  │ BioVerify service   │
                  │ Postgres 17  │  │ (separate droplet)  │
-                 │ Managed Redis│  └─────────────────────┘
-                 └──────────────┘
+                 └──────────────┘  └─────────────────────┘
 ```
 
 **Four containers**, not the twelve in `docker-compose.yml`. Milvus, MinIO, etcd and both
 ZepIris services are gone — nothing in the current architecture reads them. Verified: a DPDP
 erasure completes and self-verifies without any of them present.
 
-Roughly **$40–60/month**: droplet ~$24, managed Postgres ~$15, managed Redis ~$15.
+Roughly **$40/month**: droplet ~$24, managed Postgres ~$15. Redis runs in a container.
 
 ---
 
@@ -58,7 +57,14 @@ localisation, and add your SSH key.
 
 **Managed Postgres** — version 17, same region, same VPC.
 
-**Managed Redis (Valkey)** — same region, same VPC.
+**Redis — you do not need a managed one.** `docker-compose.prod.yml` now runs
+`redis:7-alpine` alongside the app with an append-only file on a persistent volume, so
+`REDIS_URL=redis://redis:6379/0` and there is nothing to provision. That saves about $15/month
+and is a reasonable trade here: Redis holds sessions and one-time codes, not records. If it is
+lost, people sign in again — nothing is destroyed.
+
+Use DigitalOcean Managed Redis instead only if you run more than one droplet, since a
+container-local Redis cannot be shared between them.
 
 **Firewall** — inbound `80` and `443` from anywhere, `22` from your IP only. For both databases,
 set Trusted Sources to the droplet **only** — never open them to the internet.
@@ -142,13 +148,18 @@ adduser --disabled-password --gecos "" biocore
 usermod -aG docker biocore
 ```
 
-Get the code (the repo is private, so use a read-only deploy key or a personal access token):
+Get the code:
 
 ```bash
 su - biocore
 git clone https://github.com/VijayDahiya01/biocare.git
 cd biocare/biocore
 ```
+
+The repository is public, so that clones without credentials. If it is ever made private again,
+add a **read-only deploy key** on the droplet rather than a personal access token — a token
+usually reaches every repository you own, which is a far larger blast radius if the box is
+compromised.
 
 ---
 
@@ -166,7 +177,7 @@ ENVIRONMENT=production
 DATA_REGION=india
 
 DATABASE_URL=postgresql+psycopg://biocore:PASSWORD@private-db-host:25060/biocore?sslmode=require
-REDIS_URL=rediss://default:PASSWORD@private-redis-host:25061/0
+REDIS_URL=redis://redis:6379/0        # the container in docker-compose.prod.yml
 
 SESSION_SECRET=<first openssl output>
 CSRF_SECRET=<second openssl output>

@@ -73,7 +73,7 @@ data-protection rules.
 
 ## 4. The four apps ✅
 
-### 4A. User app 📱 (`/app`) — mobile-first
+### 4A. User app 📱 (`/member`) — mobile-first
 One login for every place you belong to. Screens: login (email OTP + dev bypass), hub
 (profile, verification status, places grouped by sector, invites, badges), join-by-code,
 verify-face-once (consent + capture), business detail (role, badge, status, allow/withdraw
@@ -282,7 +282,7 @@ events) · reseller/white-label wholesale tier.
 ---
 
 ## 17. Testing & demo (local)
-- App: `http://localhost:3001` — user app (`/app/login`, Dev sign in), guard (`/guard`),
+- App: `http://localhost:3001` — user app (`/member/login`, Dev sign in), guard (`/guard`),
   kiosk (`/kiosk?token=…`), admin (`/admin/login`).
 - Demo tenant: **DEMO-2026**; admin **admin@acme.com / demopass123 + TOTP**; seed via
   `scripts/seed_demo.py` (prints creds + live 2FA). Full steps in `docs/TEST_RUNBOOK.md`.

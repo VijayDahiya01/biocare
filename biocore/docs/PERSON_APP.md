@@ -102,11 +102,11 @@ POST /person/events/{event_id}/consent/revoke
 ```
 Admin side adds: `POST /businesses/invites` (invite a person by email/phone).
 
-## 8. New screens (person app, `/app/*` to avoid clashing with `/me`)
-`/app/login` · `/app` (profile + business cards by sector + pending invites) ·
-`/app/verify` (one-time face capture) · `/app/b/[membership]` (role/badges/
-verification/check-in history + one-tap consent) · `/app/b/[membership]/events`
-(register + per-event consent) · `/app/join` (enter code).
+## 8. New screens (person app, `/member/*` to avoid clashing with `/me`)
+`/member/login` · `/member` (profile + business cards by sector + pending invites) ·
+`/member/verify` (one-time face capture) · `/member/b/[membership]` (role/badges/
+verification/check-in history + one-tap consent) · `/member/b/[membership]/events`
+(register + per-event consent) · `/member/join` (enter code).
 
 ## 9. Phased build
 1. **Schema** — persons, `users.person_id`, person_faces, business_invites, event_registrations (migration `0007`).
@@ -114,7 +114,7 @@ verification/check-in history + one-tap consent) · `/app/b/[membership]/events`
 3. **Join** — invite + accept, join-by-code.
 4. **Face-once + per-purpose consent reuse** — master template, provision-on-allow.
 5. **Events** — register + per-event consent.
-6. **Screens** — the `/app/*` UI.
+6. **Screens** — the `/member/*` UI.
 7. **Tests** — person isolation (a person sees only their own memberships), join, consent-reuse, event consent; acceptance additions.
 
 Backwards compatible: existing `/me`, `/admin`, `/kiosk` and all current APIs are unchanged; this is additive.

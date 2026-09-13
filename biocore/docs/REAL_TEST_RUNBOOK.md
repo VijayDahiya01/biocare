@@ -52,7 +52,7 @@ Check all five are alive:
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/health     # {"status":"ok"}
 curl -s http://127.0.0.1:8099/health            # {"model":"buffalo_l"}
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3001/app/login   # 200
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3001/member/login   # 200
 C:/Users/DELL/tools/redis/redis-cli.exe -p 6379 ping                       # PONG
 ```
 
@@ -241,7 +241,7 @@ Camera only works on `localhost` or `https` — use this PC, not a phone over th
 | Screen | URL | Status |
 |---|---|---|
 | Admin | http://localhost:3001/admin/login | **Works.** Needs the 2FA code |
-| Person app | http://localhost:3001/app/login | **Works** |
+| Person app | http://localhost:3001/member/login | **Works** |
 | Guard console | http://localhost:3001/guard?token=&lt;pairing_token&gt; | **Works** — walk-up, calls `/entry/identify` |
 | Kiosk | http://localhost:3001/kiosk?token=&lt;pairing_token&gt; | **Default mode BROKEN** (see below) |
 
@@ -249,7 +249,7 @@ Browser run-through:
 
 1. `/admin/login` → sign in with 2FA → **Devices** → create a gate → copy its token.
 2. **Users / Invites** → invite yourself by email.
-3. `/app/login` → request a code → read it from Redis (§3 step 5) → sign in.
+3. `/member/login` → request a code → read it from Redis (§3 step 5) → sign in.
 4. Accept the invite → consent → **capture your face with the webcam**.
 5. Open `/guard?token=…` → look at the camera → you are recognised by name.
 6. Have someone else look at it → not recognised.

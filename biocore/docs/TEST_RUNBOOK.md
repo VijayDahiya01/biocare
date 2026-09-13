@@ -34,8 +34,8 @@ for that tenant, with a 0.99 score; quality always passes, never a spoof. So:
 
 ---
 
-## Test 1 — User app (person) 📱  `/app`
-1. Open **http://localhost:3001/app/login** → click **Dev sign in (skip OTP)**.
+## Test 1 — User app (person) 📱  `/member`
+1. Open **http://localhost:3001/member/login** → click **Dev sign in (skip OTP)**.
 2. **Hub:** see your profile, "0 places", empty state. ✅ layout, crimson theme.
 3. **Join:** tap **+ Join** → enter **DEMO-2026** → **Join**. Back on hub: "Demo Co",
    sector **OFFICE**, chips **Pending face** + **Tap to allow**. ✅
