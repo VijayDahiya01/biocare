@@ -2,7 +2,7 @@
 // Your details. Until this is filled in, the app only knows your email address — and the name
 // on file is a placeholder taken from it, which is not a name and must not reach a guard's
 // screen or be compared against a government record.
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError, api } from "../../../lib/api";
 
@@ -13,7 +13,15 @@ type Profile = {
 
 const GENDERS = ["female", "male", "non-binary", "prefer not to say"];
 
-export default function MyDetails() {
+export default function MyDetailsPage() {
+  return (
+    <Suspense fallback={<p className="app-sub" style={{ padding: 8 }}>One moment…</p>}>
+      <MyDetails />
+    </Suspense>
+  );
+}
+
+function MyDetails() {
   const router = useRouter();
   const next = useSearchParams().get("next");
 

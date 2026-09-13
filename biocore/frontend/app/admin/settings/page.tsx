@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, api } from "../../../lib/api";
 
-type Settings = { branding: any; dpdp: any; settings: any; vertical: string; plan: string };
+type Settings = { branding: any; dpdp: any; settings: any; vertical: string; plan: string; verification_level: string };
 type Hook = { id: string; event: string; url: string; active: boolean };
 
 const EVENTS = ["access.granted", "access.denied", "attendance.recorded", "blacklist.hit", "visitor.arrived", "badge.print"];
