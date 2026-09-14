@@ -146,6 +146,23 @@ export default function Hub() {
           </div>
         </div>
       ))}
+
+      {/* Everything about them rather than a place. Reaching these by clicking a small avatar
+          was not a route anyone would find. */}
+      <div className="sector">You</div>
+      <div className="app-card" style={{ padding: 0, overflow: "hidden" }}>
+        {[
+          ["/member/profile", "My details", "Name, and what a gate shows when it recognises you"],
+          ["/me/consent", "What I have agreed to", "Turn face entry off at any place"],
+          ["/me/data", "Download my data", "Everything held about you, in a file"],
+          ["/me/erasure", "Erase everything", "Removed for good, with a certificate"],
+        ].map(([href, title, sub]) => (
+          <a key={href} href={href} className="toggle" style={{ borderRadius: 0 }}>
+            <span className="tw"><b>{title}</b><span>{sub}</span></span>
+            <span className="chev">›</span>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

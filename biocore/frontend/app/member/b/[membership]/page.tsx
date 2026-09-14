@@ -27,6 +27,14 @@ export default function BusinessDetail({ params }: { params: { membership: strin
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The pass this device kept when face entry was set up. Only some organisations issue one,
+  // and it lives per-browser — so treat "not here" as normal, never as an error.
+  const [pass, setPass] = useState<string | null>(null);
+  const [showPass, setShowPass] = useState(false);
+
+  useEffect(() => {
+    try { setPass(localStorage.getItem(`biocore.pass.${membership}`)); } catch { /* private window */ }
+  }, [membership]);
 
   const load = useCallback(async () => {
     try { setD(await api<Detail>(`/person/businesses/${membership}`)); }
@@ -63,6 +71,26 @@ export default function BusinessDetail({ params }: { params: { membership: strin
         {d.face_verified_here ? (
           <>
             <p className="app-sub" style={{ margin: "0 0 6px" }}>You can enter with just your face at this business.</p>
+            {pass && (
+              <>
+                <button className="btn" style={{ marginBottom: 8 }}
+                        onClick={() => setShowPass(!showPass)}>
+                  {showPass ? "Hide my pass" : "Show my pass"}
+                </button>
+                {showPass && (
+                  <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`data:image/png;base64,${pass}`} alt="Your entry pass"
+                         style={{ width: 210, maxWidth: "100%", imageRendering: "pixelated",
+                                  background: "#fff", padding: 10, borderRadius: 8 }} />
+                    <p className="app-sub" style={{ fontSize: 12, marginTop: 8 }}>
+                      Works without a signal. Showing it is not enough on its own — a gate still
+                      has to see your face.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
             <button className="btn danger" disabled={busy} onClick={revoke}>Turn off face entry</button>
           </>
         ) : (
