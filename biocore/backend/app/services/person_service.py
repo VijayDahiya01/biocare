@@ -8,6 +8,7 @@ import secrets
 from datetime import date, datetime, timezone
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adapters.zepiris import ZepIrisError, get_zepiris
@@ -466,5 +467,15 @@ def update_profile(db: Session, *, person_id: str, first_name: str, last_name: s
         if phone and phone.strip():
             p.phone = phone.strip()
         p.profile_completed_at = datetime.now(timezone.utc)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as e:
+            db.rollback()
+            if "persons_phone_key" in str(e.orig):
+                raise ApiError(409, "PHONE_ALREADY_REGISTERED",
+                               "That phone number is already registered to another account.")
+            if "persons_email_key" in str(e.orig):
+                raise ApiError(409, "EMAIL_ALREADY_REGISTERED",
+                               "That email is already registered to another account.")
+            raise ApiError(409, "CONFLICT", "That could not be saved — please try again.")
     return profile(db, person_id)
