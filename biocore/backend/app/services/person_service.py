@@ -31,8 +31,10 @@ from app.models import (
     TenantSubject,
     User,
     UserBadge,
+    Zone,
 )
 from app.services import face_vault
+from app.services.access_logic import BadgeView, ZoneView, explain_access
 
 _REQUIRED_ACKS = ("purpose_understood", "sensitivity_understood", "rights_understood", "freely_given")
 
@@ -78,17 +80,25 @@ def has_master_face(db: Session, person_id: str) -> bool:
     return row is not None
 
 
-def has_entry_credential(db: Session, membership_id: str) -> bool:
-    """New verified-identity system (§11.1): an active encrypted FaceCredential for this
+def entry_credential(db: Session, membership_id: str) -> FaceCredential | None:
+    """New verified-identity system (§11.1): the active encrypted FaceCredential for this
     membership's tenant subject (keyed on membership id). This is what the real-engine
-    'Set up face entry' flow creates, so the person app reflects the real credential."""
+    'Set up face entry' flow creates, so the person app reflects the real credential.
+
+    Minting retires whatever it supersedes, so at most one should be active; ordering by
+    newest keeps the answer stable if that ever stops holding."""
     subj_id = db.execute(select(TenantSubject.id).where(
         TenantSubject.external_reference == membership_id)).scalars().first()
     if not subj_id:
-        return False
-    return db.execute(select(FaceCredential.id).where(
+        return None
+    return db.execute(select(FaceCredential).where(
         FaceCredential.tenant_subject_id == subj_id,
-        FaceCredential.status == "active").limit(1)).first() is not None
+        FaceCredential.status == "active")
+        .order_by(FaceCredential.created_at.desc()).limit(1)).scalars().first()
+
+
+def has_entry_credential(db: Session, membership_id: str) -> bool:
+    return entry_credential(db, membership_id) is not None
 
 
 def profile(db: Session, person_id: str) -> dict:
@@ -322,15 +332,79 @@ def membership_detail(db: Session, *, person_id: str, membership_id: str) -> dic
         badges = [b.name for b in db.execute(
             select(Badge).join(UserBadge, UserBadge.badge_id == Badge.id)
             .where(UserBadge.user_id == u.id)).scalars().all()]
-        verified = has_entry_credential(db, membership_id) or db.execute(select(FaceRecord.id).where(
+        cred = entry_credential(db, membership_id)
+        verified = cred is not None or db.execute(select(FaceRecord.id).where(
             FaceRecord.user_id == u.id, FaceRecord.is_active.is_(True)).limit(1)).first() is not None
         hist = db.execute(select(AttendanceLog).where(AttendanceLog.user_id == u.id)
                           .order_by(AttendanceLog.created_at.desc()).limit(50)).scalars().all()
+        # Zones only gate anything once a reader is pointed at one, so an organisation with
+        # none has no "where can I go" to answer — say nothing rather than show an empty list.
+        has_zones = db.execute(select(Zone.id).where(Zone.tenant_id == u.tenant_id)
+                               .limit(1)).first() is not None
         return {
             "membership_id": membership_id, "business": t.name, "sector": t.vertical,
             "role": u.role, "status": u.status, "face_verified_here": verified, "badges": badges,
+            # The credential runs out on a date nobody ever showed the person, so the first
+            # they learned of it was a door refusing them. Surface it while it can still be renewed.
+            "credential_expires_at": (cred.expires_at.isoformat()
+                                      if cred is not None and cred.expires_at else None),
+            "has_zones": has_zones,
             "history": [{"event": h.event_type, "at": h.created_at.isoformat()} for h in hist],
         }
+
+
+def access_overview(db: Session, *, person_id: str, membership_id: str) -> dict:
+    """Every zone at this business and whether this person gets through it.
+
+    The yes/no comes from explain_access, which delegates to the same evaluate_access the
+    kiosk calls — including `now`, which is UTC there. Reading the clock the same way the
+    door reads it matters more here than reading it the way a person would: a page that
+    disagrees with the gate is worse than one that is plainly a little odd about hours.
+    """
+    with bypass_rls(db):
+        u = db.get(User, membership_id)
+        if not u or str(u.person_id) != person_id:
+            raise ApiError(404, "MEMBERSHIP_NOT_FOUND", "Not your membership.")
+        t = db.get(Tenant, u.tenant_id)
+        badge_rows = db.execute(
+            select(Badge).join(UserBadge, UserBadge.badge_id == Badge.id)
+            .where(UserBadge.user_id == u.id)).scalars().all()
+        zone_rows = db.execute(select(Zone).where(Zone.tenant_id == u.tenant_id)
+                               .order_by(Zone.name)).scalars().all()
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    names = {str(b.id): b.name for b in badge_rows}
+    views = [BadgeView(badge_id=str(b.id), zones={str(z) for z in (b.zones or [])},
+                       time_rule=b.time_rule, time_windows=b.time_windows or [], expiry=b.expiry)
+             for b in badge_rows]
+
+    zones = []
+    for z in zone_rows:
+        rule = z.access_rule or {}
+        zv = ZoneView(zone_id=str(z.id), type=z.type,
+                      allowed_badges=[str(x) for x in rule.get("allowed_badges", [])],
+                      time_windows=rule.get("time_windows", []))
+        a = explain_access(zv, views, now)
+        zones.append({
+            "zone_id": a.zone_id, "name": z.name, "kind": z.type,
+            "status": a.status, "open_now": a.granted_now, "reason": a.reason,
+            "hours": a.hours,
+            "via_badge": names.get(a.via_badge) if a.via_badge else None,
+            "expires": a.expires.isoformat() if a.expires else None,
+            # Kit you have to be wearing to get in. Worth knowing before you walk over.
+            "requires_ppe": bool(rule.get("require_ppe")),
+            "ppe_items": list(rule.get("ppe_items") or []) if rule.get("require_ppe") else [],
+        })
+
+    return {
+        "membership_id": membership_id, "business": t.name,
+        "checked_at": now.isoformat(),
+        "badges": [{"name": b.name,
+                    "expires": b.expiry.isoformat() if b.expiry else None,
+                    "expired": bool(b.expiry and b.expiry < today)} for b in badge_rows],
+        "zones": zones,
+    }
 
 
 def list_business_events(db: Session, *, person_id: str, membership_id: str) -> list[dict]:

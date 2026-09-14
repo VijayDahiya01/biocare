@@ -176,6 +176,15 @@ def business_detail(request: Request, membership_id: str,
         db, person_id=principal.person_id, membership_id=membership_id))
 
 
+@router.get("/businesses/{membership_id}/access")
+def business_access(request: Request, membership_id: str,
+                    principal: PersonPrincipal = Depends(get_person),
+                    db: Session = Depends(person_db)):
+    """Which doors here will open for me, and when — before one refuses me in front of people."""
+    return success(request, person_service.access_overview(
+        db, person_id=principal.person_id, membership_id=membership_id))
+
+
 @router.get("/businesses/{membership_id}/events")
 def business_events(request: Request, membership_id: str,
                     principal: PersonPrincipal = Depends(get_person),

@@ -6,8 +6,11 @@ import { ApiError, api } from "../../../../lib/api";
 
 type Detail = {
   membership_id: string; business: string; sector: string; role: string; status: string;
-  face_verified_here: boolean; badges: string[]; history: { event: string; at: string }[];
+  face_verified_here: boolean; badges: string[]; credential_expires_at: string | null;
+  has_zones: boolean; history: { event: string; at: string }[];
 };
+
+const DAY = 86400000;
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   active: { label: "Active", cls: "green" }, suspended: { label: "Suspended", cls: "red" },
@@ -20,6 +23,8 @@ const EVENT: Record<string, { label: string; cls: string }> = {
 };
 const ev = (e: string) => EVENT[e] || { label: e.replace(/_/g, " "), cls: "gray" };
 const humanize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : s);
+const dateFmt = (s: string) =>
+  new Date(s).toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });
 
 export default function BusinessDetail({ params }: { params: { membership: string } }) {
   const { membership } = params;
@@ -56,6 +61,11 @@ export default function BusinessDetail({ params }: { params: { membership: strin
   if (!d) return <p className="app-sub" style={{ padding: 8 }}>{err || "Loading…"}</p>;
 
   const timeFmt = (s: string) => new Date(s).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  // Whole days left on the credential. Negative means it already lapsed — which the person
+  // would otherwise find out from a door, in front of a queue.
+  const expiresIn = d.credential_expires_at
+    ? Math.floor((new Date(d.credential_expires_at).getTime() - Date.now()) / DAY)
+    : null;
 
   return (
     <div>
@@ -71,6 +81,16 @@ export default function BusinessDetail({ params }: { params: { membership: strin
         {d.face_verified_here ? (
           <>
             <p className="app-sub" style={{ margin: "0 0 6px" }}>You can enter with just your face at this business.</p>
+            {expiresIn !== null && (
+              <p className={expiresIn < 0 ? "app-err" : expiresIn <= 30 ? "app-warn" : "app-sub"}
+                 style={{ margin: "0 0 10px", fontSize: 13.5 }}>
+                {expiresIn < 0
+                  ? `Ran out on ${dateFmt(d.credential_expires_at!)}. Set it up again to keep walking in.`
+                  : expiresIn <= 30
+                    ? `Runs out in ${expiresIn === 0 ? "less than a day" : `${expiresIn} day${expiresIn === 1 ? "" : "s"}`} — on ${dateFmt(d.credential_expires_at!)}. Set it up again before then.`
+                    : `Valid until ${dateFmt(d.credential_expires_at!)}.`}
+              </p>
+            )}
             {pass && (
               <>
                 <button className="btn" style={{ marginBottom: 8 }}
@@ -108,6 +128,14 @@ export default function BusinessDetail({ params }: { params: { membership: strin
           {d.badges.length ? d.badges.map((b) => <span key={b} className="pill gray">{b}</span>) : <span className="app-sub">none</span>}
         </div>
       </div>
+
+      {d.has_zones && (
+        <a className="tile" href={`/member/b/${membership}/access`}>
+          <div className="ic">🗺️</div>
+          <div><div className="tt">Where can I go?</div><div className="ts">Which doors open for you, and when</div></div>
+          <span className="chev">›</span>
+        </a>
+      )}
 
       <a className="tile" href={`/member/b/${membership}/events`}>
         <div className="ic">🎫</div>
